@@ -53,6 +53,10 @@ func RecordNamespace(ns *v1.Namespace) Record {
 	return RecordStructStatic(NamespaceConstructor, rName, rUID, rLabels)
 }
 
+func RecordNamespaceKey(namespace string) Record {
+	return RecordString(namespace)
+}
+
 func RecordPodSpec(spec *v1.PodSpec) Record {
 	return RecordStructStatic(PodSpecConstructor, RecordString(spec.NodeName))
 }
@@ -69,6 +73,12 @@ func RecordPod(pod *v1.Pod) Record {
 	rSpec := RecordPodSpec(&pod.Spec)
 	rStatus := RecordPodStatus(&pod.Status)
 	return RecordStructStatic(PodConstructor, rName, rNamespace, rUID, rLabels, rSpec, rStatus)
+}
+
+func RecordPodKey(namespace, name string) Record {
+	rNamespace := RecordString(namespace)
+	rName := RecordString(name)
+	return RecordPair(rNamespace, rName)
 }
 
 func RecordIntOrString(v *intstr.IntOrString) Record {
@@ -224,4 +234,10 @@ func RecordNetworkPolicy(np *networkingv1.NetworkPolicy) Record {
 	rUID := RecordUID(np.UID)
 	rSpec := RecordNetworkPolicySpec(&np.Spec)
 	return RecordStructStatic(NetworkPolicyConstructor, rName, rNamespace, rUID, rSpec)
+}
+
+func RecordNetworkPolicyKey(namespace, name string) Record {
+	rNamespace := RecordString(namespace)
+	rName := RecordString(name)
+	return RecordPair(rNamespace, rName)
 }

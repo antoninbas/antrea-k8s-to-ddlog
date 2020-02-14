@@ -96,7 +96,7 @@ func main() {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 
-	_ = controller.NewController(
+	c := controller.NewController(
 		clientset,
 		podInformer,
 		namespaceInformer,
@@ -107,6 +107,8 @@ func main() {
 	stopCh := signals.RegisterSignalHandlers()
 
 	informerFactory.Start(stopCh)
+
+	go c.Run(stopCh)
 
 	<-stopCh
 

@@ -76,12 +76,11 @@ func RecordI32(v int32) Record {
 }
 
 func RecordString(v string) Record {
-	cs := C.CString(v)
-	defer C.free(unsafe.Pointer(cs))
-	r := C.ddlog_string(cs)
-	// TODO(antonin): use this when empty string issue has been resolved
+	// cs := C.CString(v)
+	// defer C.free(unsafe.Pointer(cs))
+	// r := C.ddlog_string(cs)
 	// avoid an extra copy
-	// r := C.ddlogString(v)
+	r := C.ddlogString(v)
 	return Record{r}
 }
 
