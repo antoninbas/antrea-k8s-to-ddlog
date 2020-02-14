@@ -15,31 +15,100 @@
 package main
 
 import (
-	"fmt"
+	"flag"
+	"os"
+	"path/filepath"
+	"time"
 
+	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/controller"
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
+	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/signals"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/component-base/logs"
+	"k8s.io/klog"
 )
 
-func test() {
-	name := "k8spolicy.Pod"
-	id := ddlog.GetTableId(name)
-	fmt.Printf("Id for table '%s' is: %d\n", name, id)
+func homeDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return os.Getenv("USERPROFILE") // windows
 }
 
 func main() {
-	test()
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
-	ns := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "testNamespace",
-			UID:    "testUID",
-			Labels: map[string]string{"app": "nginx"},
-		},
+	// ns := &v1.Namespace{
+	// 	ObjectMeta: metav1.ObjectMeta{
+	// 		Name:   "testNamespace",
+	// 		UID:    "testUID",
+	// 		Labels: map[string]string{"app": "nginx"},
+	// 	},
+	// }
+	// r := ddlog.RecordNamespace(ns)
+	// defer r.Free()
+	// fmt.Println(r.Dump())
+
+	recordCommands := flag.String("record-commands", "", "Provide a file name where to record commands sent to DDLog")
+	dumpChanges := flag.String("dump-changes", "", "Provide a file name where to dump record changes")
+
+	var kubeconfig *string
+	if home := homeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	}
-	r := ddlog.RecordNamespace(ns)
-	defer r.Free()
-	fmt.Println(r.Dump())
+	flag.Parse()
+
+	// use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	ddlogProgram, err := ddlog.NewProgram(1, *dumpChanges)
+	if err != nil {
+		klog.Fatalf("Error when creating DDLog program: %v", err)
+	}
+	defer func() {
+		klog.Infof("Stopping DDLog program")
+		if err := ddlogProgram.Stop(); err != nil {
+			klog.Errorf("Error when stopping DDLog program: %v", err)
+		}
+	}()
+
+	if *recordCommands != "" {
+		ddlogProgram.StartRecordingCommands(*recordCommands)
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*30)
+	podInformer := informerFactory.Core().V1().Pods()
+	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
+
+	_ = controller.NewController(
+		clientset,
+		podInformer,
+		namespaceInformer,
+		networkPolicyInformer,
+		ddlogProgram,
+	)
+
+	stopCh := signals.RegisterSignalHandlers()
+
+	informerFactory.Start(stopCh)
+
+	<-stopCh
+
+	klog.Infof("Exiting")
 }

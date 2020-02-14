@@ -8,6 +8,32 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+var (
+	PodTableID           = GetTableID("k8spolicy.Pod")
+	NamespaceTableID     = GetTableID("k8spolicy.Namespace")
+	NetworkPolicyTableID = GetTableID("k8spolicy.NetworkPolicy")
+
+	// these are never freed
+	NetworkPolicyConstructor               = NewCString("k8spolicy.NetworkPolicy")
+	NetworkPolicyPortConstructor           = NewCString("k8spolicy.NetworkPolicyPort")
+	NetworkPolicyPeerConstructor           = NewCString("k8spolicy.NetworkPolicyPeer")
+	NetworkPolicyIngressRuleConstructor    = NewCString("k8spolicy.NetworkPolicyIngressRule")
+	NetworkPolicyEgressRuleConstructor     = NewCString("k8spolicy.NetworkPolicyEgressRule")
+	PolicyTypeIngressConstructor           = NewCString("k8spolicy.PolicyTypeIngress")
+	PolicyTypeEgressConstructor            = NewCString("k8spolicy.PolicyTypeEgress")
+	NamespaceConstructor                   = NewCString("k8spolicy.Namespace")
+	PodSpecConstructor                     = NewCString("k8spolicy.PodSpec")
+	PodStatusConstructor                   = NewCString("k8spolicy.PodStatus")
+	PodConstructor                         = NewCString("k8spolicy.Pod")
+	LabelSelectorOpInConstructor           = NewCString("k8spolicy.LabelSelectorOpIn")
+	LabelSelectorOpNotInConstructor        = NewCString("k8spolicy.LabelSelectorOpNotIn")
+	LabelSelectorOpExistsConstructor       = NewCString("k8spolicy.LabelSelectorOpExists")
+	LabelSelectorOpDoesNotExistConstructor = NewCString("k8spolicy.LabelSelectorOpDoesNotExist")
+	LabelSelectorRequirementConstructor    = NewCString("k8spolicy.LabelSelectorRequirementConstructor")
+	LabelSelectorConstructor               = NewCString("k8spolicy.LabelSelector")
+	IPBlockConstructor                     = NewCString("k8spolicy.IPBlock")
+)
+
 func RecordUID(UID types.UID) Record {
 	return RecordStruct("k8spolicy.UID", RecordString(string(UID)))
 }
@@ -24,15 +50,15 @@ func RecordNamespace(ns *v1.Namespace) Record {
 	rName := RecordString(ns.Name)
 	rUID := RecordUID(ns.UID)
 	rLabels := RecordLabels(ns.Labels)
-	return RecordStruct("k8spolicy.Namespace", rName, rUID, rLabels)
+	return RecordStructStatic(NamespaceConstructor, rName, rUID, rLabels)
 }
 
 func RecordPodSpec(spec *v1.PodSpec) Record {
-	return RecordStruct("k8spolicy.PodSpec", RecordString(spec.NodeName))
+	return RecordStructStatic(PodSpecConstructor, RecordString(spec.NodeName))
 }
 
 func RecordPodStatus(status *v1.PodStatus) Record {
-	return RecordStruct("k8spolicy.PodStatus", RecordString(status.PodIP))
+	return RecordStructStatic(PodStatusConstructor, RecordString(status.PodIP))
 }
 
 func RecordPod(pod *v1.Pod) Record {
@@ -42,14 +68,14 @@ func RecordPod(pod *v1.Pod) Record {
 	rLabels := RecordLabels(pod.Labels)
 	rSpec := RecordPodSpec(&pod.Spec)
 	rStatus := RecordPodStatus(&pod.Status)
-	return RecordStruct("k8spolicy.Pod", rName, rNamespace, rUID, rLabels, rSpec, rStatus)
+	return RecordStructStatic(PodConstructor, rName, rNamespace, rUID, rLabels, rSpec, rStatus)
 }
 
 func RecordIntOrString(v *intstr.IntOrString) Record {
 	if v.Type == intstr.Int {
-		return RecordEither(RecordI32(v.IntVal), RecordNull())
+		return RecordLeft(RecordI32(v.IntVal))
 	} else if v.Type == intstr.String {
-		return RecordEither(RecordNull(), RecordString(v.StrVal))
+		return RecordRight(RecordString(v.StrVal))
 	}
 	// should not happen
 	return RecordNull()
@@ -61,13 +87,13 @@ func RecordLabelSelectorRequirement(req *metav1.LabelSelectorRequirement) Record
 	var rOperator Record
 	switch req.Operator {
 	case metav1.LabelSelectorOpIn:
-		rOperator = RecordStruct("k8spolicy.LabelSelectorOpIn")
+		rOperator = RecordStructStatic(LabelSelectorOpInConstructor)
 	case metav1.LabelSelectorOpNotIn:
-		rOperator = RecordStruct("k8spolicy.LabelSelectorOpNotIn")
+		rOperator = RecordStructStatic(LabelSelectorOpNotInConstructor)
 	case metav1.LabelSelectorOpExists:
-		rOperator = RecordStruct("k8spolicy.LabelSelectorOpExists")
+		rOperator = RecordStructStatic(LabelSelectorOpExistsConstructor)
 	case metav1.LabelSelectorOpDoesNotExist:
-		rOperator = RecordStruct("k8spolicy.LabelSelectorOpDoesNotExist")
+		rOperator = RecordStructStatic(LabelSelectorOpDoesNotExistConstructor)
 	}
 
 	rValues := RecordVector()
@@ -75,7 +101,7 @@ func RecordLabelSelectorRequirement(req *metav1.LabelSelectorRequirement) Record
 		RecordVectorPush(rValues, RecordString(value))
 	}
 
-	return RecordStruct("k8spolicy.LabelSelectorRequirement", rKey, rOperator, rValues)
+	return RecordStructStatic(LabelSelectorRequirementConstructor, rKey, rOperator, rValues)
 }
 
 func RecordLabelSelector(labelSelector *metav1.LabelSelector) Record {
@@ -84,7 +110,7 @@ func RecordLabelSelector(labelSelector *metav1.LabelSelector) Record {
 	for _, req := range labelSelector.MatchExpressions {
 		RecordVectorPush(rMatchExpressions, RecordLabelSelectorRequirement(&req))
 	}
-	return RecordStruct("k8spolicy.LabelSelector", rMatchLabels, rMatchExpressions)
+	return RecordStructStatic(LabelSelectorConstructor, rMatchLabels, rMatchExpressions)
 }
 
 func RecordNetworkPolicyPort(policyPort *networkingv1.NetworkPolicyPort) Record {
@@ -102,7 +128,7 @@ func RecordNetworkPolicyPort(policyPort *networkingv1.NetworkPolicyPort) Record 
 		rPort = RecordSome(RecordIntOrString(policyPort.Port))
 	}
 
-	return RecordStruct("k8spolicy.NetworkPolicy", rProto, rPort)
+	return RecordStructStatic(NetworkPolicyPortConstructor, rProto, rPort)
 }
 
 func RecordIPBlock(ipBlock *networkingv1.IPBlock) Record {
@@ -111,7 +137,7 @@ func RecordIPBlock(ipBlock *networkingv1.IPBlock) Record {
 	for _, except := range ipBlock.Except {
 		RecordVectorPush(rExcept, RecordString(except))
 	}
-	return RecordStruct("k8spolicy.IPBlock", rCIDR, rExcept)
+	return RecordStructStatic(IPBlockConstructor, rCIDR, rExcept)
 }
 
 func RecordNetworkPolicyPeer(policyPeer *networkingv1.NetworkPolicyPeer) Record {
@@ -136,7 +162,7 @@ func RecordNetworkPolicyPeer(policyPeer *networkingv1.NetworkPolicyPeer) Record 
 		rIPBlock = RecordSome(RecordIPBlock(policyPeer.IPBlock))
 	}
 
-	return RecordStruct("k8spolicies.NetworkPolicyPeer", rPodSelector, rNamespaceSelector, rIPBlock)
+	return RecordStructStatic(NetworkPolicyPeerConstructor, rPodSelector, rNamespaceSelector, rIPBlock)
 }
 
 func RecordNetworkPolicyIngressRule(rule *networkingv1.NetworkPolicyIngressRule) Record {
@@ -150,7 +176,7 @@ func RecordNetworkPolicyIngressRule(rule *networkingv1.NetworkPolicyIngressRule)
 		RecordVectorPush(rFrom, RecordNetworkPolicyPeer(&from))
 	}
 
-	return RecordStruct("k8spolicy.NetworkPolicyIngressRule", rPorts, rFrom)
+	return RecordStructStatic(NetworkPolicyIngressRuleConstructor, rPorts, rFrom)
 }
 
 func RecordNetworkPolicyEgressRule(rule *networkingv1.NetworkPolicyEgressRule) Record {
@@ -164,7 +190,7 @@ func RecordNetworkPolicyEgressRule(rule *networkingv1.NetworkPolicyEgressRule) R
 		RecordVectorPush(rTo, RecordNetworkPolicyPeer(&to))
 	}
 
-	return RecordStruct("k8spolicy.NetworkPolicyEgressRule", rPorts, rTo)
+	return RecordStructStatic(NetworkPolicyEgressRuleConstructor, rPorts, rTo)
 }
 
 func RecordNetworkPolicySpec(spec *networkingv1.NetworkPolicySpec) Record {
@@ -183,9 +209,9 @@ func RecordNetworkPolicySpec(spec *networkingv1.NetworkPolicySpec) Record {
 	rPolicyTypes := RecordVector()
 	for _, pType := range spec.PolicyTypes {
 		if pType == networkingv1.PolicyTypeIngress {
-			RecordVectorPush(rPolicyTypes, RecordStruct("k8spolicy.PolicyTypeIngress"))
+			RecordVectorPush(rPolicyTypes, RecordStructStatic(PolicyTypeIngressConstructor))
 		} else if pType == networkingv1.PolicyTypeEgress {
-			RecordVectorPush(rPolicyTypes, RecordStruct("k8spolicy.PolicyTypeEgress"))
+			RecordVectorPush(rPolicyTypes, RecordStructStatic(PolicyTypeEgressConstructor))
 		}
 	}
 
@@ -197,5 +223,5 @@ func RecordNetworkPolicy(np *networkingv1.NetworkPolicy) Record {
 	rNamespace := RecordString(np.Namespace)
 	rUID := RecordUID(np.UID)
 	rSpec := RecordNetworkPolicySpec(&np.Spec)
-	return RecordStruct("k8spolicy.NetworkPolicy", rName, rNamespace, rUID, rSpec)
+	return RecordStructStatic(NetworkPolicyConstructor, rName, rNamespace, rUID, rSpec)
 }

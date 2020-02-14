@@ -53,7 +53,12 @@ typedef void ddlog_record;
 
 
 /*
- * Get DDlog table id by name.
+ * Get DDlog table id by name.  The table name is a null-terminated UTF8
+ * string.
+ *
+ * NOTE: for tables declared outside of the main DDlog module, fully qualified
+ * module names must be used, e.g., the fully qualified name of a table named
+ * "Pod" declared inside the "k8spolicy" module is "k8spolicy.Pod".
  *
  * On error, returns -1.
  */
@@ -62,7 +67,7 @@ extern table_id ddlog_get_table_id(const char* tname);
 /*
  * Get DDlog table name from id.
  *
- * On error, returns NULL.
+ * Returns a null-terminated UTF8 string on success or NULL on error.
  */
 extern const char* ddlog_get_table_name(table_id id);
 
@@ -461,7 +466,7 @@ extern int ddlog_enable_cpu_profiling(ddlog_prog prog, bool enable);
 /*
  * Returns DDlog program runtime profile as a C string.
  *
- * The returned string must be deallocated using ddlog_string_free().
+ * The returned string must be deallocated using `ddlog_string_free()`.
  */
 extern char* ddlog_profile(ddlog_prog prog);
 
@@ -533,7 +538,7 @@ extern char* ddlog_profile(ddlog_prog prog);
  */
 
 /*
- * Dump record into a string for debug printing.
+ * Dump record into a C string for debug printing.
  *
  * Returns `NULL` on error.
  *
@@ -547,7 +552,7 @@ extern char* ddlog_dump_record(const ddlog_record *rec);
 extern void ddlog_free(ddlog_record *rec);
 
 /*
- * Deallocate a string returned by DDlog
+ * Deallocate a C string returned by DDlog
  * (currently only applicable to the string returned by `ddlog_profile()` and
  * `ddlog_dump_record()`).
  */
@@ -665,13 +670,27 @@ extern ddlog_record* ddlog_i128(__int128_t v);
 extern __int128_t ddlog_get_i128(const ddlog_record *rec);
 
 /*
- * Create a string value.  This function copies `s` to an internal
- * buffer, so the caller is responsible for deallocating `s` if it was
- * dynamically allocated.
+ * Create a string value from a NULL-terminated string `s`.  This function
+ * copies `s` to an internal buffer, so the caller is responsible for
+ * deallocating `s` if it was dynamically allocated.
  *
  * Returns `NULL` if `s` is not a valid null-terminated UTF8 string.
  */
 extern ddlog_record* ddlog_string(const char *s);
+
+/*
+ * Create a string value.
+ *
+ * `s` - points to the start of a UTF8 string.  The string does not have to be
+ *       NULL-terminated.
+ * `length` - length of string in bytes.
+ *
+ * This function copies `s` to an internal buffer, so the caller is responsible for
+ * deallocating `s` if it was dynamically allocated.
+ *
+ * Returns `NULL` if `s` is not a valid UTF8 string.
+ */
+extern ddlog_record* ddlog_string_with_length(const char * s, size_t len);
 
 /*
  * Returns `true` if `rec` is a string and `false` otherwise
@@ -679,25 +698,29 @@ extern ddlog_record* ddlog_string(const char *s);
 extern bool ddlog_is_string(const ddlog_record *rec);
 
 /*
- * Retrieves the length of a string.
+ * Retrieves the length of a string in bytes.
  *
  * Returns `0` if `rec` is not a string.
  */
 extern size_t ddlog_get_strlen(const ddlog_record *rec);
 
 /*
- * Returns the content of a DDlog string.
+ * Returns the contents of a DDlog string.
  *
- * WARNING: DDlog strings are _not_ null-terminated; use `ddlog_get_strlen()`
- * to determine the length of the string.
+ * On success, returns pointer to the string and stores the length of the
+ * string in bytes in `len`.
+ *
+ * If `rec` is not a record of type string, returns `NULL`.
+ *
+ * IMPORTANT: The returned string is _not_ null-terminated.
  *
  * The pointer returned by this function points to an internal DDlog
- * buffer. The caller must not modify the content of the string or
+ * buffer. The caller must not modify the contents of the string or
  * deallocate this pointer.  The lifetime of the pointer coincides with
  * the lifetime of the record it was obtained from, e.g., the pointer is
  * invalidated when the value is written to the database.
  */
-extern const char * ddlog_get_str_non_nul(const ddlog_record *rec);
+extern const char * ddlog_get_str_with_length(const ddlog_record *rec, size_t *len);
 
 /*
  * Create a tuple with specified fields.
@@ -964,12 +987,32 @@ extern ddlog_record* ddlog_struct(const char* constructor,
                                   ddlog_record ** args, size_t len);
 
 /*
- * Same as ddlog_struct(), but assumes that `constructor` is a statically
+ * Same as `ddlog_struct()`, but passes constructor name as
+ * non-null-terminated string represented by its start address and length in
+ * bytes.
+ */
+extern ddlog_record* ddlog_struct_with_length(const char* constructor,
+                                              size_t constructor_len,
+                                              ddlog_record ** args,
+                                              size_t len);
+
+/*
+ * Same as `ddlog_struct()`, but assumes that `constructor` is a statically
  * allocated string and stores the pointer internally instead of copying it to
  * another buffer.
  */
 extern ddlog_record* ddlog_struct_static_cons(const char *constructor,
                                               ddlog_record **args, size_t len);
+
+/*
+ * Same as ddlog_struct_static_cons(), but passes constructor name as
+ * non-null-terminated string represented by its start address and length in
+ * bytes.
+ */
+extern ddlog_record* ddlog_struct_static_cons_with_length(
+        const char *constructor,
+        size_t constructor_len,
+        ddlog_record **args, size_t args_len);
 
 /*
  * Returns `true` if `rec` is a struct.
@@ -978,13 +1021,12 @@ extern bool ddlog_is_struct(const ddlog_record *rec);
 
 /*
  * Retrieves constructor name as a non-null-terminated string.  Returns
- * string length in `len`.
+ * string length in bytes in `len`.
  *
  * Returns NULL if `rec` is not a struct.
  */
-extern const char * ddlog_get_constructor_non_null(const ddlog_record *rec,
-                                                   size_t *len);
-
+extern const char * ddlog_get_constructor_with_length(const ddlog_record *rec,
+                                                      size_t *len);
 
 /*
  * Retrieves `i`th argument of a struct.

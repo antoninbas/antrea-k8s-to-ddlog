@@ -17,7 +17,7 @@ fmt:
 # Run unit tests only, no integration tests
 .PHONY: check-unit
 check-unit:
-	$(GO) test github.com/antoninbas/antrea-k8s-to-ddlog/...
+	$(GO) test -v github.com/antoninbas/antrea-k8s-to-ddlog/...
 
 .PHONY: check
 check:
