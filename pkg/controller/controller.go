@@ -38,9 +38,12 @@ import (
 const (
 	// Interval of synchronizing status from apiserver.
 	syncPeriod = 0
+
 	// How long to wait before retrying the processing of a change.
 	minRetryDelay = 1 * time.Second
 	maxRetryDelay = 300 * time.Second
+
+	defaultInputWorkers = 1
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -74,22 +77,13 @@ type Controller struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
-	queue workqueue.RateLimitingInterface
+	podQueue workqueue.RateLimitingInterface
+
+	namespaceQueue workqueue.RateLimitingInterface
+
+	networkPolicyQueue workqueue.RateLimitingInterface
 
 	ddlogProgram *ddlog.Program
-}
-
-type queueObjType int
-
-const (
-	queueObjPod queueObjType = iota
-	queueObjNamespace
-	queueObjNetworkPolicy
-)
-
-type queueObj struct {
-	objType queueObjType
-	key     string
 }
 
 // NewController returns a new *Controller.
@@ -112,50 +106,71 @@ func NewController(
 		networkPolicyLister:       networkPolicyInformer.Lister(),
 		networkPolicyListerSynced: networkPolicyInformer.Informer().HasSynced,
 		ddlogProgram:              ddlogProgram,
-		queue:                     workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "items"),
+		podQueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "pods"),
+		namespaceQueue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "namespaces"),
+		networkPolicyQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkPolicies"),
 	}
 	// Add handlers for Pod events.
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { c.enqueue(queueObjPod, obj) },
-			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueue(queueObjPod, curObj) },
-			DeleteFunc: func(obj interface{}) { c.enqueue(queueObjPod, obj) },
+			AddFunc:    c.enqueuePod,
+			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueuePod(curObj) },
+			DeleteFunc: c.enqueuePod,
 		},
 		syncPeriod,
 	)
 	// Add handlers for Namespace events.
 	namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { c.enqueue(queueObjNamespace, obj) },
-			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueue(queueObjNamespace, curObj) },
-			DeleteFunc: func(obj interface{}) { c.enqueue(queueObjNamespace, obj) },
+			AddFunc:    c.enqueueNamespace,
+			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueueNamespace(curObj) },
+			DeleteFunc: c.enqueueNamespace,
 		},
 		syncPeriod,
 	)
 	// Add handlers for NetworkPolicy events.
 	networkPolicyInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { c.enqueue(queueObjNetworkPolicy, obj) },
-			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueue(queueObjNetworkPolicy, curObj) },
-			DeleteFunc: func(obj interface{}) { c.enqueue(queueObjNetworkPolicy, obj) },
+			AddFunc:    c.enqueueNetworkPolicy,
+			UpdateFunc: func(oldObj, curObj interface{}) { c.enqueueNetworkPolicy(curObj) },
+			DeleteFunc: c.enqueueNetworkPolicy,
 		},
 		syncPeriod,
 	)
 	return c
 }
 
-func (c *Controller) enqueue(objType queueObjType, obj interface{}) {
+func (c *Controller) enqueuePod(obj interface{}) {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
-		klog.Errorf("Error when generating key for object: %v", err)
+		klog.Errorf("Error when generating key for Pod: %v", err)
 		return
 	}
-	queueObj := queueObj{objType, key}
-	c.queue.Add(queueObj)
+	c.podQueue.Add(key)
+}
+
+func (c *Controller) enqueueNamespace(obj interface{}) {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		klog.Errorf("Error when generating key for Namespace: %v", err)
+		return
+	}
+	c.namespaceQueue.Add(key)
+}
+
+func (c *Controller) enqueueNetworkPolicy(obj interface{}) {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		klog.Errorf("Error when generating key for NetworkPolicy: %v", err)
+		return
+	}
+	c.networkPolicyQueue.Add(key)
 }
 
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	defer c.queue.ShutDown()
+	defer c.podQueue.ShutDown()
+	defer c.namespaceQueue.ShutDown()
+	defer c.networkPolicyQueue.ShutDown()
 
 	klog.Info("Starting controller")
 	defer klog.Info("Shutting down controller")
@@ -169,42 +184,47 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	// all events are processed by the same worker, since DDLog does not support concurrent
 	// transactions
-	go wait.Until(c.worker, time.Second, stopCh)
+	for i := 0; i < defaultInputWorkers; i++ {
+		go wait.Until(c.podWorker, time.Second, stopCh)
+		go wait.Until(c.namespaceWorker, time.Second, stopCh)
+		go wait.Until(c.networkPolicyWorker, time.Second, stopCh)
+	}
 	<-stopCh
 }
 
-func (c *Controller) worker() {
-	for c.processNextEvent() {
+func (c *Controller) podWorker() {
+	for c.processNextPod() {
 	}
 }
 
-func (c *Controller) processNextEvent() bool {
-	obj, quit := c.queue.Get()
+func (c *Controller) namespaceWorker() {
+	for c.processNextNamespace() {
+	}
+}
+
+func (c *Controller) networkPolicyWorker() {
+	for c.processNextNetworkPolicy() {
+	}
+}
+
+func (c *Controller) processNextPod() bool {
+	obj, quit := c.podQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(obj)
-	qObj := obj.(queueObj)
-	var err error
-	switch qObj.objType {
-	case queueObjPod:
-		err = c.processPod(qObj)
-	case queueObjNamespace:
-		err = c.processNamespace(qObj)
-	case queueObjNetworkPolicy:
-		err = c.processNetworkPolicy(qObj)
-	}
-	if err != nil {
-		klog.Errorf("Error when processing event: %v", err)
-		c.queue.AddRateLimited(obj)
+	defer c.podQueue.Done(obj)
+	key := obj.(string)
+	if err := c.processPod(key); err != nil {
+		klog.Errorf("Error when processing Pod '%s': %v", key, err)
+		c.podQueue.AddRateLimited(obj)
 		return true
 	}
-	c.queue.Forget(obj)
+	c.podQueue.Forget(obj)
 	return true
 }
 
-func (c *Controller) processPod(obj queueObj) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(obj.key)
+func (c *Controller) processPod(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("error when extracting Pod namespace and name: %v", err)
 	}
@@ -225,11 +245,27 @@ func (c *Controller) processPod(obj queueObj) error {
 	return nil
 }
 
-func (c *Controller) processNamespace(obj queueObj) error {
-	namespace, err := c.namespaceLister.Get(obj.key)
+func (c *Controller) processNextNamespace() bool {
+	obj, quit := c.namespaceQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.namespaceQueue.Done(obj)
+	key := obj.(string)
+	if err := c.processNamespace(key); err != nil {
+		klog.Errorf("Error when processing Namespace '%s': %v", key, err)
+		c.namespaceQueue.AddRateLimited(obj)
+		return true
+	}
+	c.namespaceQueue.Forget(obj)
+	return true
+}
+
+func (c *Controller) processNamespace(key string) error {
+	namespace, err := c.namespaceLister.Get(key)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog.RecordNamespaceKey(obj.key)
+		r := ddlog.RecordNamespaceKey(key)
 		klog.Infof("DELETE NAMESPACE: %s", r.Dump())
 		cmd = ddlog.NewDeleteValCommand(ddlog.NamespaceTableID, r)
 	} else {
@@ -243,8 +279,24 @@ func (c *Controller) processNamespace(obj queueObj) error {
 	return nil
 }
 
-func (c *Controller) processNetworkPolicy(obj queueObj) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(obj.key)
+func (c *Controller) processNextNetworkPolicy() bool {
+	obj, quit := c.networkPolicyQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.networkPolicyQueue.Done(obj)
+	key := obj.(string)
+	if err := c.processNetworkPolicy(key); err != nil {
+		klog.Errorf("Error when processing NetworkPolicy '%s': %v", key, err)
+		c.networkPolicyQueue.AddRateLimited(obj)
+		return true
+	}
+	c.networkPolicyQueue.Forget(obj)
+	return true
+}
+
+func (c *Controller) processNetworkPolicy(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("error when extracting NetworkPolicy namespace and name: %v", err)
 	}
