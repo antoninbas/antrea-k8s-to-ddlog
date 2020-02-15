@@ -202,6 +202,8 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
+// We assume that there cannot be transient issues with DDLog transactions, and so there is no point
+// in retrying.
 func (c *Controller) generateTransactions(stopCh <-chan struct{}) {
 	transactionSize := 0
 	parentCxt, parentCancel := context.WithCancel(context.Background())

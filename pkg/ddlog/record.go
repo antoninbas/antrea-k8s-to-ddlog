@@ -107,6 +107,11 @@ func RecordStructStatic(constructor CString, records ...Record) Record {
 }
 
 func RecordTuple(records ...Record) Record {
+	// avoid unecessary C calls if we are creating an empty vector
+	if len(records) == 0 {
+		r := C.ddlog_vector(nil, 0)
+		return Record{r}
+	}
 	recordArray := C.makeRecordArray(C.ulong(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
@@ -116,12 +121,21 @@ func RecordTuple(records ...Record) Record {
 	return Record{r}
 }
 
+func RecordTuplePush(rTuple, rValue Record) {
+	C.ddlog_tuple_push(rTuple.ptr, rValue.ptr)
+}
+
 func RecordPair(r1, r2 Record) Record {
 	r := C.ddlog_pair(r1.ptr, r2.ptr)
 	return Record{r}
 }
 
 func RecordMap(records ...Record) Record {
+	// avoid unecessary C calls if we are creating an empty map
+	if len(records) == 0 {
+		r := C.ddlog_vector(nil, 0)
+		return Record{r}
+	}
 	recordArray := C.makeRecordArray(C.ulong(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
@@ -136,6 +150,11 @@ func RecordMapPush(rMap, rKey, rValue Record) {
 }
 
 func RecordVector(records ...Record) Record {
+	// avoid unecessary C calls if we are creating an empty vector
+	if len(records) == 0 {
+		r := C.ddlog_vector(nil, 0)
+		return Record{r}
+	}
 	recordArray := C.makeRecordArray(C.ulong(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
