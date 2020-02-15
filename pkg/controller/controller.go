@@ -19,6 +19,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -44,6 +45,9 @@ const (
 	maxRetryDelay = 300 * time.Second
 
 	defaultInputWorkers = 1
+
+	maxUpdatesPerTransaction = 32
+	maxTransactionDelay      = 100 * time.Millisecond
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
@@ -84,6 +88,8 @@ type Controller struct {
 	networkPolicyQueue workqueue.RateLimitingInterface
 
 	ddlogProgram *ddlog.Program
+
+	ddlogUpdatesCh chan ddlog.Command
 }
 
 // NewController returns a new *Controller.
@@ -109,6 +115,7 @@ func NewController(
 		podQueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "pods"),
 		namespaceQueue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "namespaces"),
 		networkPolicyQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkPolicies"),
+		ddlogUpdatesCh:            make(chan ddlog.Command, maxUpdatesPerTransaction),
 	}
 	// Add handlers for Pod events.
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -182,14 +189,67 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 	klog.Info("Caches are synced for controller")
 
-	// all events are processed by the same worker, since DDLog does not support concurrent
+	// one worker is in charge of all the transactions since DDLog does not support concurrent
 	// transactions
+	go c.generateTransactions(stopCh)
+
 	for i := 0; i < defaultInputWorkers; i++ {
 		go wait.Until(c.podWorker, time.Second, stopCh)
 		go wait.Until(c.namespaceWorker, time.Second, stopCh)
 		go wait.Until(c.networkPolicyWorker, time.Second, stopCh)
 	}
+
 	<-stopCh
+}
+
+func (c *Controller) generateTransactions(stopCh <-chan struct{}) {
+	transactionSize := 0
+	parentCxt, parentCancel := context.WithCancel(context.Background())
+	defer parentCancel()
+
+	ctx := parentCxt
+	var cancel context.CancelFunc
+
+	commitTransaction := func() {
+		transactionSize = 0
+		ctx = parentCxt
+		if err := c.ddlogProgram.CommitTransaction(); err != nil {
+			klog.Errorf("Error when committing DDLog transaction: %v", err)
+		}
+	}
+
+	handleCommand := func(cmd ddlog.Command) {
+		klog.Infof("Handling command")
+		if transactionSize == 0 {
+			// start transaction
+			if err := c.ddlogProgram.StartTransaction(); err != nil {
+				klog.Errorf("Error when starting DDLog transaction: %v", err)
+				return
+			}
+			ctx, cancel = context.WithTimeout(parentCxt, maxTransactionDelay)
+		}
+		// add to transaction
+		if err := c.ddlogProgram.ApplyUpdates(cmd); err != nil {
+			klog.Errorf("Error when applying updates with DDLog: %v", err)
+			return
+		}
+		transactionSize++
+		if transactionSize >= maxUpdatesPerTransaction {
+			cancel()
+			commitTransaction()
+		}
+	}
+
+	for {
+		select {
+		case cmd := <-c.ddlogUpdatesCh:
+			handleCommand(cmd)
+		case <-ctx.Done():
+			commitTransaction()
+		case <-stopCh:
+			return
+		}
+	}
 }
 
 func (c *Controller) podWorker() {
@@ -239,9 +299,7 @@ func (c *Controller) processPod(key string) error {
 		klog.Infof("INSERT POD: %s", r.Dump())
 		cmd = ddlog.NewInsertCommand(ddlog.PodTableID, r)
 	}
-	if err := c.ddlogProgram.ApplyUpdatesAsTransaction(cmd); err != nil {
-		return fmt.Errorf("could not apply Pod update: %v", err)
-	}
+	c.ddlogUpdatesCh <- cmd
 	return nil
 }
 
@@ -273,9 +331,7 @@ func (c *Controller) processNamespace(key string) error {
 		klog.Infof("INSERT NAMESPACE: %s", r.Dump())
 		cmd = ddlog.NewInsertCommand(ddlog.NamespaceTableID, r)
 	}
-	if err := c.ddlogProgram.ApplyUpdatesAsTransaction(cmd); err != nil {
-		return fmt.Errorf("could not apply Namespace update: %v", err)
-	}
+	c.ddlogUpdatesCh <- cmd
 	return nil
 }
 
@@ -311,8 +367,6 @@ func (c *Controller) processNetworkPolicy(key string) error {
 		klog.Infof("INSERT NETWORKPOLICY: %s", r.Dump())
 		cmd = ddlog.NewInsertCommand(ddlog.NetworkPolicyTableID, r)
 	}
-	if err := c.ddlogProgram.ApplyUpdatesAsTransaction(cmd); err != nil {
-		return fmt.Errorf("could not apply NetworkPolicy update: %v", err)
-	}
+	c.ddlogUpdatesCh <- cmd
 	return nil
 }

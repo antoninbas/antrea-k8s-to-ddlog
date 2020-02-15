@@ -169,6 +169,14 @@ func (p *Program) ApplyUpdates(commands ...Command) error {
 	return nil
 }
 
+func (p *Program) ApplyUpdate(command Command) error {
+	rc := C.ddlog_apply_updates(p.ptr, &command.ptr, 1)
+	if rc != 0 {
+		return fmt.Errorf("ddlog_apply_updates returned error code %d", rc)
+	}
+	return nil
+}
+
 func (p *Program) ApplyUpdatesAsTransaction(commands ...Command) error {
 	if err := p.StartTransaction(); err != nil {
 		return err
