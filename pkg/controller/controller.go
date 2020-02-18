@@ -221,7 +221,7 @@ func (c *Controller) generateTransactions(stopCh <-chan struct{}) {
 	}
 
 	handleCommand := func(cmd ddlog.Command) {
-		klog.Infof("Handling command")
+		klog.V(2).Infof("Handling command")
 		if transactionSize == 0 {
 			// start transaction
 			if err := c.ddlogProgram.StartTransaction(); err != nil {
@@ -298,8 +298,8 @@ func (c *Controller) processPod(key string) error {
 		cmd = ddlog.NewDeleteKeyCommand(ddlog.PodTableID, r)
 	} else {
 		r := ddlog.RecordPod(pod)
-		klog.Infof("INSERT POD: %s", r.Dump())
-		cmd = ddlog.NewInsertCommand(ddlog.PodTableID, r)
+		klog.Infof("UPDATE POD: %s", r.Dump())
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.PodTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -327,11 +327,11 @@ func (c *Controller) processNamespace(key string) error {
 	if err != nil { // deletion
 		r := ddlog.RecordNamespaceKey(key)
 		klog.Infof("DELETE NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewDeleteValCommand(ddlog.NamespaceTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlog.NamespaceTableID, r)
 	} else {
 		r := ddlog.RecordNamespace(namespace)
-		klog.Infof("INSERT NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewInsertCommand(ddlog.NamespaceTableID, r)
+		klog.Infof("UPDATE NAMESPACE: %s", r.Dump())
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.NamespaceTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -366,8 +366,8 @@ func (c *Controller) processNetworkPolicy(key string) error {
 		cmd = ddlog.NewDeleteKeyCommand(ddlog.NetworkPolicyTableID, r)
 	} else {
 		r := ddlog.RecordNetworkPolicy(networkPolicy)
-		klog.Infof("INSERT NETWORKPOLICY: %s", r.Dump())
-		cmd = ddlog.NewInsertCommand(ddlog.NetworkPolicyTableID, r)
+		klog.Infof("UPDATE NETWORKPOLICY: %s", r.Dump())
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.NetworkPolicyTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
