@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
+	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog_k8s"
 )
 
 const (
@@ -293,13 +294,13 @@ func (c *Controller) processPod(key string) error {
 	pod, err := c.podLister.Pods(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog.RecordPodKey(namespace, name)
+		r := ddlog_k8s.RecordPodKey(namespace, name)
 		klog.Infof("DELETE POD: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog.PodTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.PodTableID, r)
 	} else {
-		r := ddlog.RecordPod(pod)
+		r := ddlog_k8s.RecordPod(pod)
 		klog.Infof("UPDATE POD: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.PodTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.PodTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -325,13 +326,13 @@ func (c *Controller) processNamespace(key string) error {
 	namespace, err := c.namespaceLister.Get(key)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog.RecordNamespaceKey(key)
+		r := ddlog_k8s.RecordNamespaceKey(key)
 		klog.Infof("DELETE NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog.NamespaceTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.NamespaceTableID, r)
 	} else {
-		r := ddlog.RecordNamespace(namespace)
+		r := ddlog_k8s.RecordNamespace(namespace)
 		klog.Infof("UPDATE NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.NamespaceTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.NamespaceTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -361,13 +362,13 @@ func (c *Controller) processNetworkPolicy(key string) error {
 	networkPolicy, err := c.networkPolicyLister.NetworkPolicies(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog.RecordNetworkPolicyKey(namespace, name)
+		r := ddlog_k8s.RecordNetworkPolicyKey(namespace, name)
 		klog.Infof("DELETE NETWORKPOLICY: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog.NetworkPolicyTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.NetworkPolicyTableID, r)
 	} else {
-		r := ddlog.RecordNetworkPolicy(networkPolicy)
+		r := ddlog_k8s.RecordNetworkPolicy(networkPolicy)
 		klog.Infof("UPDATE NETWORKPOLICY: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog.NetworkPolicyTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.NetworkPolicyTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
