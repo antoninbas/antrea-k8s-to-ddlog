@@ -57,8 +57,7 @@ func RecordBool(v bool) Record {
 }
 
 func RecordU64(v uint64) Record {
-	// won't work on 32 bit arch
-	r := C.ddlog_u64(C.ulong(v))
+	r := C.ddlog_u64(C.uint64_t(v))
 	return Record{r}
 }
 
@@ -67,7 +66,7 @@ func RecordU32(v uint32) Record {
 }
 
 func RecordI64(v int64) Record {
-	r := C.ddlog_i64(C.long(v))
+	r := C.ddlog_i64(C.int64_t(v))
 	return Record{r}
 }
 
@@ -87,22 +86,22 @@ func RecordString(v string) Record {
 func RecordStruct(constructor string, records ...Record) Record {
 	cs := C.CString(constructor)
 	defer C.free(unsafe.Pointer(cs))
-	recordArray := C.makeRecordArray(C.ulong(len(records)))
+	recordArray := C.makeRecordArray(C.size_t(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
-		C.addRecordToArray(recordArray, C.ulong(idx), record.ptr)
+		C.addRecordToArray(recordArray, C.size_t(idx), record.ptr)
 	}
-	r := C.ddlog_struct(cs, recordArray, C.ulong(len(records)))
+	r := C.ddlog_struct(cs, recordArray, C.size_t(len(records)))
 	return Record{r}
 }
 
 func RecordStructStatic(constructor CString, records ...Record) Record {
-	recordArray := C.makeRecordArray(C.ulong(len(records)))
+	recordArray := C.makeRecordArray(C.size_t(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
-		C.addRecordToArray(recordArray, C.ulong(idx), record.ptr)
+		C.addRecordToArray(recordArray, C.size_t(idx), record.ptr)
 	}
-	r := C.ddlog_struct_static_cons(constructor.ptr, recordArray, C.ulong(len(records)))
+	r := C.ddlog_struct_static_cons(constructor.ptr, recordArray, C.size_t(len(records)))
 	return Record{r}
 }
 
@@ -112,12 +111,12 @@ func RecordTuple(records ...Record) Record {
 		r := C.ddlog_vector(nil, 0)
 		return Record{r}
 	}
-	recordArray := C.makeRecordArray(C.ulong(len(records)))
+	recordArray := C.makeRecordArray(C.size_t(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
-		C.addRecordToArray(recordArray, C.ulong(idx), record.ptr)
+		C.addRecordToArray(recordArray, C.size_t(idx), record.ptr)
 	}
-	r := C.ddlog_tuple(recordArray, C.ulong(len(records)))
+	r := C.ddlog_tuple(recordArray, C.size_t(len(records)))
 	return Record{r}
 }
 
@@ -136,12 +135,12 @@ func RecordMap(records ...Record) Record {
 		r := C.ddlog_vector(nil, 0)
 		return Record{r}
 	}
-	recordArray := C.makeRecordArray(C.ulong(len(records)))
+	recordArray := C.makeRecordArray(C.size_t(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
-		C.addRecordToArray(recordArray, C.ulong(idx), record.ptr)
+		C.addRecordToArray(recordArray, C.size_t(idx), record.ptr)
 	}
-	r := C.ddlog_map(recordArray, C.ulong(len(records)))
+	r := C.ddlog_map(recordArray, C.size_t(len(records)))
 	return Record{r}
 }
 
@@ -155,12 +154,12 @@ func RecordVector(records ...Record) Record {
 		r := C.ddlog_vector(nil, 0)
 		return Record{r}
 	}
-	recordArray := C.makeRecordArray(C.ulong(len(records)))
+	recordArray := C.makeRecordArray(C.size_t(len(records)))
 	defer C.freeRecordArray(recordArray)
 	for idx, record := range records {
-		C.addRecordToArray(recordArray, C.ulong(idx), record.ptr)
+		C.addRecordToArray(recordArray, C.size_t(idx), record.ptr)
 	}
-	r := C.ddlog_vector(recordArray, C.ulong(len(records)))
+	r := C.ddlog_vector(recordArray, C.size_t(len(records)))
 	return Record{r}
 }
 

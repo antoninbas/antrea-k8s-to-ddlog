@@ -76,7 +76,14 @@ func main() {
 		panic(err.Error())
 	}
 
-	ddlogProgram, err := ddlog.NewProgram(1, *dumpChanges)
+	var outRecordHandler ddlog.OutRecordHandler
+	if *dumpChanges == "" {
+		outRecordHandler, _ = ddlog.NewOutRecordSink()
+	} else {
+		outRecordHandler, _ = ddlog.NewOutRecordDumper(*dumpChanges)
+	}
+
+	ddlogProgram, err := ddlog.NewProgram(1, outRecordHandler)
 	if err != nil {
 		klog.Fatalf("Error when creating DDLog program: %v", err)
 	}

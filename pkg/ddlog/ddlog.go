@@ -3,32 +3,35 @@ package ddlog
 /*
 #cgo LDFLAGS: -L${SRCDIR}/libs -lnetworkpolicy_controller_ddlog
 #include "ddlog.h"
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-ddlog_cmd **makeCmdArray(size_t s) {
+// Functions have to be static or the linker gives "multiple definition" errors.
+// Not sure why but it only started happening after I started exporting Go functions with //export
+// to call them from this C code.
+
+static ddlog_cmd **makeCmdArray(size_t s) {
     return malloc(s * sizeof(ddlog_cmd *));
 }
 
-void addCmdToArray(ddlog_cmd **ca, size_t idx, ddlog_cmd *cmd) {
+static void addCmdToArray(ddlog_cmd **ca, size_t idx, ddlog_cmd *cmd) {
     ca[idx] = cmd;
 }
 
-void freeCmdArray(ddlog_cmd **ca) {
+static void freeCmdArray(ddlog_cmd **ca) {
     free(ca);
 }
 
-void dumpChangesCb(void *arg, table_id table, const ddlog_record *rec, bool polarity) {
-    int fd = (int)(uintptr_t)arg;
-    char *str = ddlog_dump_record(rec);
-    ssize_t s = write(fd, str, strlen(str));
-    s = write(fd, "\n", 1);
-    ddlog_string_free(str);
+extern void HandleOutRecord(uintptr_t, table_id table, ddlog_record *rec, bool polarity);
+
+static void dumpChangesCb(void *arg, table_id table, const ddlog_record *rec, bool polarity) {
+    HandleOutRecord((uintptr_t)arg, table, (ddlog_record *)rec, polarity);
 }
 
-int ddlogTransactionCommitDumpChanges(ddlog_prog hprog, int fd) {
-    return ddlog_transaction_commit_dump_changes(hprog, dumpChangesCb, (uintptr_t)fd);
+static int ddlogTransactionCommitDumpChanges(ddlog_prog hprog, uintptr_t arg) {
+    return ddlog_transaction_commit_dump_changes(hprog, dumpChangesCb, arg);
 }
 */
 import "C"
@@ -37,6 +40,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -48,30 +52,76 @@ func GetTableID(name string) TableID {
 	return TableID(C.ddlog_get_table_id(cs))
 }
 
-type Program struct {
-	ptr          C.ddlog_prog
-	commandsFile *os.File
-	dumpChanges  bool
+type OutPolarity int
+
+const (
+	OutPolarityInsert OutPolarity = iota
+	OutPolarityDelete
+)
+
+type OutRecordHandler interface {
+	Handle(TableID, Record, OutPolarity)
+}
+
+type OutRecordSink struct{}
+
+func NewOutRecordSink() (*OutRecordSink, error) {
+	return &OutRecordSink{}, nil
+}
+
+func (s *OutRecordSink) Handle(tableID TableID, r Record, outPolarity OutPolarity) {}
+
+type OutRecordDumper struct {
 	changesFile  *os.File
 	changesMutex sync.Mutex
 }
 
-func NewProgram(workers uint, changesFileName string) (*Program, error) {
-	prog := C.ddlog_run(C.uint(workers), false, nil, C.ulong(0), nil)
-	var changesFile *os.File
-	if changesFileName != "" {
-		var err error
-		changesFile, err = os.Create(changesFileName)
-		if err != nil {
-			return nil, fmt.Errorf("error when creating file '%s' to dump changes: %v", changesFileName, err)
-		}
+func NewOutRecordDumper(changesFileName string) (*OutRecordDumper, error) {
+	changesFile, err := os.Create(changesFileName)
+	if err != nil {
+		return nil, fmt.Errorf("error when creating file '%s' to dump changes: %v", changesFileName, err)
 	}
-	return &Program{
-		ptr:          prog,
-		commandsFile: nil,
-		dumpChanges:  (changesFileName != ""),
-		changesFile:  changesFile,
+	return &OutRecordDumper{
+		changesFile: changesFile,
 	}, nil
+}
+
+func (d *OutRecordDumper) Handle(tableID TableID, r Record, outPolarity OutPolarity) {
+	d.changesMutex.Lock()
+	defer d.changesMutex.Unlock()
+	d.changesFile.WriteString(r.Dump())
+	d.changesFile.WriteString("\n")
+}
+
+// We can't pass pointers allocated in Go to C directly, because the Go concurrent garbage collector
+// may move data around. Since we need to be able to retrieve the Program instance when the
+// HandleOutRecord callback is called, we use an integer "index" as the user-defined callback
+// argument and this index can be mapped to the correct Program instance (*Program) in our
+// thread-safe store. This workaround is described in the Go wiki:
+// https://github.com/golang/go/wiki/cgo#function-variables.
+var (
+	_progIdx   uintptr = 0
+	_progStore sync.Map
+)
+
+type Program struct {
+	ptr              C.ddlog_prog
+	commandsFile     *os.File
+	outRecordHandler OutRecordHandler
+	progIdx          uintptr
+}
+
+func NewProgram(workers uint, outRecordHandler OutRecordHandler) (*Program, error) {
+	progIdx := atomic.AddUintptr(&_progIdx, uintptr(1))
+	prog := C.ddlog_run(C.uint(workers), false, nil, 0, nil)
+	p := &Program{
+		ptr:              prog,
+		commandsFile:     nil,
+		outRecordHandler: outRecordHandler,
+		progIdx:          progIdx,
+	}
+	_progStore.Store(progIdx, p)
+	return p, nil
 }
 
 func (p *Program) stopRecording() error {
@@ -122,14 +172,11 @@ func (p *Program) Stop() error {
 		return fmt.Errorf("error when stopping command recording: %v", err)
 	}
 
-	if p.changesFile != nil {
-		defer p.changesFile.Close()
-	}
-
 	rc := C.ddlog_stop(p.ptr)
 	if rc != 0 {
 		return fmt.Errorf("ddlog_stop returned error code %d", rc)
 	}
+	_progStore.Delete(p.progIdx)
 	return nil
 }
 
@@ -142,14 +189,11 @@ func (p *Program) StartTransaction() error {
 }
 
 func (p *Program) CommitTransaction() error {
-	var rc C.int
-	if p.dumpChanges {
-		p.changesMutex.Lock()
-		rc = C.ddlogTransactionCommitDumpChanges(p.ptr, C.int(p.changesFile.Fd()))
-		p.changesMutex.Unlock()
-	} else {
-		rc = C.ddlog_transaction_commit(p.ptr)
-	}
+	// Because of garbage collection, cgo does not let us pass a Go pointer as the callback
+	// argument (C code is not supposed to store a Go pointer). We therefore use the trick
+	// described in the Go wiki (https://github.com/golang/go/wiki/cgo#function-variables) and
+	// we use a thread-safe registry for Program instances.
+	rc := C.ddlogTransactionCommitDumpChanges(p.ptr, C.uint64_t(p.progIdx))
 	if rc != 0 {
 		return fmt.Errorf("ddlog_transaction_commit returned error code %d", rc)
 	}
@@ -157,12 +201,12 @@ func (p *Program) CommitTransaction() error {
 }
 
 func (p *Program) ApplyUpdates(commands ...Command) error {
-	cmdArray := C.makeCmdArray(C.ulong(len(commands)))
+	cmdArray := C.makeCmdArray(C.size_t(len(commands)))
 	defer C.freeCmdArray(cmdArray)
 	for idx, command := range commands {
-		C.addCmdToArray(cmdArray, C.ulong(idx), command.ptr)
+		C.addCmdToArray(cmdArray, C.size_t(idx), command.ptr)
 	}
-	rc := C.ddlog_apply_updates(p.ptr, cmdArray, C.ulong(len(commands)))
+	rc := C.ddlog_apply_updates(p.ptr, cmdArray, C.size_t(len(commands)))
 	if rc != 0 {
 		return fmt.Errorf("ddlog_apply_updates returned error code %d", rc)
 	}
@@ -188,4 +232,22 @@ func (p *Program) ApplyUpdatesAsTransaction(commands ...Command) error {
 		return err
 	}
 	return nil
+}
+
+//export HandleOutRecord
+func HandleOutRecord(progIdx C.uintptr_t, tableID C.size_t, recordPtr *C.ddlog_record, polarity C.bool) {
+	pIntf, ok := _progStore.Load(uintptr(progIdx))
+	if !ok {
+		panic("Cannot find program in store")
+	}
+	p := pIntf.(*Program)
+	var outPolarity OutPolarity
+	if polarity {
+		outPolarity = OutPolarityInsert
+	} else {
+		outPolarity = OutPolarityDelete
+	}
+	if p.outRecordHandler != nil {
+		p.outRecordHandler.Handle(TableID(tableID), Record{unsafe.Pointer(recordPtr)}, outPolarity)
+	}
 }
