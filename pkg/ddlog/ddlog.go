@@ -313,6 +313,6 @@ func handleOutRecord(progIdx C.uintptr_t, tableID C.size_t, recordPtr *C.ddlog_r
 		outPolarity = OutPolarityDelete
 	}
 	if p.outRecordHandler != nil {
-		p.outRecordHandler.Handle(TableID(tableID), Record{unsafe.Pointer(recordPtr)}, outPolarity)
+		p.outRecordHandler.Handle(TableID(tableID), &record{unsafe.Pointer(recordPtr)}, outPolarity)
 	}
 }
