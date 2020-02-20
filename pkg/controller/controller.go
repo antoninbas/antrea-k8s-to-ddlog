@@ -34,7 +34,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
-	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog_k8s"
+	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlogk8s"
 )
 
 const (
@@ -51,7 +51,7 @@ const (
 	maxTransactionDelay      = 100 * time.Millisecond
 )
 
-// NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
+// Controller is responsible for synchronizing the Namespaces and Pods
 // affected by a Network Policy.
 type Controller struct {
 	kubeClient  clientset.Interface
@@ -294,13 +294,13 @@ func (c *Controller) processPod(key string) error {
 	pod, err := c.podLister.Pods(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog_k8s.RecordPodKey(namespace, name)
+		r := ddlogk8s.RecordPodKey(namespace, name)
 		klog.Infof("DELETE POD: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.PodTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.PodTableID, r)
 	} else {
-		r := ddlog_k8s.RecordPod(pod)
+		r := ddlogk8s.RecordPod(pod)
 		klog.Infof("UPDATE POD: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.PodTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.PodTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -326,13 +326,13 @@ func (c *Controller) processNamespace(key string) error {
 	namespace, err := c.namespaceLister.Get(key)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog_k8s.RecordNamespaceKey(key)
+		r := ddlogk8s.RecordNamespaceKey(key)
 		klog.Infof("DELETE NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.NamespaceTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.NamespaceTableID, r)
 	} else {
-		r := ddlog_k8s.RecordNamespace(namespace)
+		r := ddlogk8s.RecordNamespace(namespace)
 		klog.Infof("UPDATE NAMESPACE: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.NamespaceTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.NamespaceTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil
@@ -362,13 +362,13 @@ func (c *Controller) processNetworkPolicy(key string) error {
 	networkPolicy, err := c.networkPolicyLister.NetworkPolicies(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlog_k8s.RecordNetworkPolicyKey(namespace, name)
+		r := ddlogk8s.RecordNetworkPolicyKey(namespace, name)
 		klog.Infof("DELETE NETWORKPOLICY: %s", r.Dump())
-		cmd = ddlog.NewDeleteKeyCommand(ddlog_k8s.NetworkPolicyTableID, r)
+		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.NetworkPolicyTableID, r)
 	} else {
-		r := ddlog_k8s.RecordNetworkPolicy(networkPolicy)
+		r := ddlogk8s.RecordNetworkPolicy(networkPolicy)
 		klog.Infof("UPDATE NETWORKPOLICY: %s", r.Dump())
-		cmd = ddlog.NewInsertOrUpdateCommand(ddlog_k8s.NetworkPolicyTableID, r)
+		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.NetworkPolicyTableID, r)
 	}
 	c.ddlogUpdatesCh <- cmd
 	return nil

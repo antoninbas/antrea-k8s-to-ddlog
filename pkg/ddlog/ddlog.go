@@ -44,6 +44,7 @@ import (
 	"unsafe"
 )
 
+// TableID is a unique table identifier allocated by DDlog.
 type TableID uint
 
 // GetTableID gets the table id by name.
@@ -65,7 +66,7 @@ type OutPolarity string
 const (
 	// OutPolarityInsert is used to indicate that an output record is being inserted.
 	OutPolarityInsert OutPolarity = "+1"
-	// OutPolarityInsert is used to indicate that an output record is being deleted.
+	// OutPolarityDelete is used to indicate that an output record is being deleted.
 	OutPolarityDelete OutPolarity = "-1"
 )
 
@@ -90,7 +91,7 @@ func NewOutRecordSink() (*OutRecordSink, error) {
 // Handle will discard all the changes received from DDlog.
 func (s *OutRecordSink) Handle(tableID TableID, r Record, outPolarity OutPolarity) {}
 
-// OutRecordSink implements the OutRecordHandler interface: use it to log all the changes recived
+// OutRecordDumper implements the OutRecordHandler interface: use it to log all the changes received
 // from DDlog to a file.
 type OutRecordDumper struct {
 	changesFile *os.File
@@ -170,8 +171,8 @@ func (p *Program) stopRecording() error {
 	return nil
 }
 
-// RecordCommands creates a file with the provided name to record all the commands sent to DDlog. If
-// the file already exists, it will be truncated.
+// StartRecordingCommands creates a file with the provided name to record all the commands sent to
+// DDlog. If the file already exists, it will be truncated.
 func (p *Program) StartRecordingCommands(name string) error {
 	if err := p.stopRecording(); err != nil {
 		return fmt.Errorf("error when stopping command recording: %v", err)
@@ -275,7 +276,7 @@ func (p *Program) ApplyUpdates(commands ...Command) error {
 	return nil
 }
 
-// ApplyUpdates applies a single update to DDlog tables. Must be called as part of a transaction.
+// ApplyUpdate applies a single update to DDlog tables. Must be called as part of a transaction.
 func (p *Program) ApplyUpdate(command Command) error {
 	rc := C.ddlog_apply_updates(p.ptr, &command.ptr, 1)
 	if rc != 0 {
@@ -284,7 +285,8 @@ func (p *Program) ApplyUpdate(command Command) error {
 	return nil
 }
 
-// ApplyUpdates starts a transaction, applies updates to DDlog tables and commits the transaction.
+// ApplyUpdatesAsTransaction starts a transaction, applies updates to DDlog tables and commits the
+// transaction.
 func (p *Program) ApplyUpdatesAsTransaction(commands ...Command) error {
 	if err := p.StartTransaction(); err != nil {
 		return err

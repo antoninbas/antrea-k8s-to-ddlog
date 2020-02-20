@@ -31,10 +31,14 @@ import (
 )
 
 var (
+	// StdSomeConstructor is a static string for the "std.Some" DDlog constructor.
 	StdSomeConstructor = NewCString("std.Some")
+	// StdNoneConstructor is a static string for the "std.None" DDlog constructor.
 	StdNoneConstructor = NewCString("std.None")
 
-	StdLeftConstructor  = NewCString("std.Left")
+	// StdLeftConstructor is a static string for the "std.Left" DDlog constructor.
+	StdLeftConstructor = NewCString("std.Left")
+	// StdRightConstructor is a static string for the "std.Right" DDlog constructor.
 	StdRightConstructor = NewCString("std.Right")
 )
 
@@ -53,12 +57,15 @@ func NewCString(s string) CString {
 	return CString{C.CString(s)}
 }
 
-// Free releases the memory allocated in the C heap for the underlying C string. Do not use teh
+// Free releases the memory allocated in the C heap for the underlying C string. Do not use the
 // Cstring instance after calling this method.
 func (cs CString) Free() {
 	C.free(unsafe.Pointer(cs.ptr))
 }
 
+// Record represents a DDlog record. It is an interface, rather than simply a wrapper around a
+// ddlog_record pointer, to provide some type-safety. In particular, some methods are not included
+// in this interface because they are specific to a type of record (e.g. Push() for a RecordVector).
 type Record interface {
 	ptr() unsafe.Pointer
 
@@ -102,6 +109,7 @@ type Record interface {
 	AsStructSafe() (RecordStruct, error)
 }
 
+// RecordTuple extends the Record interface for DDlog records of type tuple.
 type RecordTuple interface {
 	Record
 	Push(rValue Record)
@@ -109,6 +117,7 @@ type RecordTuple interface {
 	Size() uint
 }
 
+// RecordVector extends the Record interface for DDlog records of type vector.
 type RecordVector interface {
 	Record
 	Push(rValue Record)
@@ -116,6 +125,7 @@ type RecordVector interface {
 	Size() uint
 }
 
+// RecordMap extends the Record interface for DDlog records of type map.
 type RecordMap interface {
 	Record
 	Push(rKey, rValue Record)
@@ -125,6 +135,7 @@ type RecordMap interface {
 	Size() uint
 }
 
+// RecordSet extends the Record interface for DDlog records of type set.
 type RecordSet interface {
 	Record
 	Push(rValue Record)
@@ -132,6 +143,7 @@ type RecordSet interface {
 	Size() uint
 }
 
+// RecordStruct extends the Record interface for DDlog records of type struct.
 type RecordStruct interface {
 	Record
 	At(idx uint) Record
@@ -426,7 +438,7 @@ func (rStruct *recordStruct) At(idx uint) Record {
 
 // NewRecordTuple creates a tuple record with specified fields.
 func NewRecordTuple(records ...Record) RecordTuple {
-	// avoid unecessary C calls if we are creating an empty vector
+	// avoid unnecessary C calls if we are creating an empty vector
 	if len(records) == 0 {
 		r := C.ddlog_tuple(nil, 0)
 		return &recordTuple{record{r}}
@@ -462,7 +474,7 @@ func NewRecordPair(r1, r2 Record) RecordTuple {
 
 // NewRecordMap creates a map record with specified key-value pairs.
 func NewRecordMap(records ...Record) RecordMap {
-	// avoid unecessary C calls if we are creating an empty map
+	// avoid unnecessary C calls if we are creating an empty map
 	if len(records) == 0 {
 		r := C.ddlog_map(nil, 0)
 		return &recordMap{record{r}}
@@ -505,7 +517,7 @@ func (rMap *recordMap) Size() uint {
 
 // NewRecordVector creates a vector record with specified elements.
 func NewRecordVector(records ...Record) RecordVector {
-	// avoid unecessary C calls if we are creating an empty vector
+	// avoid unnecessary C calls if we are creating an empty vector
 	if len(records) == 0 {
 		r := C.ddlog_vector(nil, 0)
 		return &recordVector{record{r}}
@@ -535,7 +547,7 @@ func (rVec *recordVector) Size() uint {
 
 // NewRecordSet creates a set record with specified elements.
 func NewRecordSet(records ...Record) RecordSet {
-	// avoid unecessary C calls if we are creating an empty set
+	// avoid unnecessary C calls if we are creating an empty set
 	if len(records) == 0 {
 		r := C.ddlog_set(nil, 0)
 		return &recordSet{record{r}}

@@ -1,4 +1,4 @@
-package ddlog_k8s
+package ddlogk8s
 
 import (
 	"testing"
