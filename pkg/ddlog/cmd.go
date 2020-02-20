@@ -1,7 +1,6 @@
 package ddlog
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/libs -lnetworkpolicy_controller_ddlog
 #include "ddlog.h"
 */
 import "C"

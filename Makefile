@@ -1,6 +1,19 @@
 GO := go
 BINDIR := $(CURDIR)/bin
 
+# CGO_LDFLAGS = -L$(CURDIR)/pkg/ddlog/libs -lnetworkpolicy_controller_ddlog
+ifndef CGO_CPPFLAGS
+$(error CGO_CPPFLAGS is not set)
+endif
+
+# CGO_CPPFLAGS = -I$(CURDIR)/pkg/ddlog
+ifndef CGO_LDFLAGS
+$(error CGO_LDFLAGS is not set)
+endif
+
+export CGO_LDFLAGS
+export CGO_CPPFLAGS
+
 all: bin
 
 .PHONY: bin
