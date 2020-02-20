@@ -24,10 +24,10 @@ static void freeCmdArray(ddlog_cmd **ca) {
     free(ca);
 }
 
-extern void HandleOutRecord(uintptr_t, table_id table, ddlog_record *rec, bool polarity);
+extern void handleOutRecord(uintptr_t, table_id table, ddlog_record *rec, bool polarity);
 
 static void dumpChangesCb(void *arg, table_id table, const ddlog_record *rec, bool polarity) {
-    HandleOutRecord((uintptr_t)arg, table, (ddlog_record *)rec, polarity);
+    handleOutRecord((uintptr_t)arg, table, (ddlog_record *)rec, polarity);
 }
 
 static int ddlogTransactionCommitDumpChanges(ddlog_prog hprog, uintptr_t arg) {
@@ -46,36 +46,59 @@ import (
 
 type TableID uint
 
+// GetTableID gets the table id by name.
 func GetTableID(name string) TableID {
 	cs := C.CString(name)
 	defer C.free(unsafe.Pointer(cs))
 	return TableID(C.ddlog_get_table_id(cs))
 }
 
-type OutPolarity int
+// GetTableName gets the table name by id.
+func GetTableName(tableID TableID) string {
+	cs := C.ddlog_get_table_name(C.table_id(tableID))
+	return C.GoString(cs)
+}
+
+// OutPolarity indicates whether an output record is being inserted or deleted.
+type OutPolarity string
 
 const (
-	OutPolarityInsert OutPolarity = iota
-	OutPolarityDelete
+	// OutPolarityInsert is used to indicate that an output record is being inserted.
+	OutPolarityInsert OutPolarity = "+1"
+	// OutPolarityInsert is used to indicate that an output record is being deleted.
+	OutPolarityDelete OutPolarity = "-1"
 )
 
+// OutRecordHandler defines an interface which lets the client register a "callback" (when creating
+// a Program) for DDlog changes.
 type OutRecordHandler interface {
+	// Handle is called for every change reported by DDlog. There will a call to Handle for each
+	// new or deleted record (there is no notion of "modified" output record in DDlog). Handle
+	// will be called exactly once for each new / deleted record.
 	Handle(TableID, Record, OutPolarity)
 }
 
+// OutRecordSink implements the OutRecordHandler interface: use it to discard all the changes
+// received from DDlog.
 type OutRecordSink struct{}
 
+// NewOutRecordSink creates an OutRecordSink instance.
 func NewOutRecordSink() (*OutRecordSink, error) {
 	return &OutRecordSink{}, nil
 }
 
+// Handle will discard all the changes received from DDlog.
 func (s *OutRecordSink) Handle(tableID TableID, r Record, outPolarity OutPolarity) {}
 
+// OutRecordSink implements the OutRecordHandler interface: use it to log all the changes recived
+// from DDlog to a file.
 type OutRecordDumper struct {
-	changesFile  *os.File
+	changesFile *os.File
+	// changesMutex is used to serialize all the "writes" to changesFile.
 	changesMutex sync.Mutex
 }
 
+// NewOutRecordDumper creates an OutRecordDumper instance.
 func NewOutRecordDumper(changesFileName string) (*OutRecordDumper, error) {
 	changesFile, err := os.Create(changesFileName)
 	if err != nil {
@@ -86,11 +109,12 @@ func NewOutRecordDumper(changesFileName string) (*OutRecordDumper, error) {
 	}, nil
 }
 
+// Handle logs all the changes received from DDlog to a file. This should roughly match the output
+// format from the DDlog CLI. Errors occurring when writing to disk are ignored.
 func (d *OutRecordDumper) Handle(tableID TableID, r Record, outPolarity OutPolarity) {
 	d.changesMutex.Lock()
 	defer d.changesMutex.Unlock()
-	d.changesFile.WriteString(r.Dump())
-	d.changesFile.WriteString("\n")
+	fmt.Fprintf(d.changesFile, "%s:\n%s: %s\n", GetTableName(tableID), r.Dump(), outPolarity)
 }
 
 // We can't pass pointers allocated in Go to C directly, because the Go concurrent garbage collector
@@ -104,6 +128,7 @@ var (
 	_progStore sync.Map
 )
 
+// Program is an instance of a DDlog program. It corresponds to ddlog_prog struct in the C API.
 type Program struct {
 	ptr              C.ddlog_prog
 	commandsFile     *os.File
@@ -111,8 +136,14 @@ type Program struct {
 	progIdx          uintptr
 }
 
+// NewProgram creates a new instance of a DDlog Program. workers is the number of worker threads
+// that DDlog is allowed to use. outRecordHandler implements the Handle method, which will be called
+// every time an output record is created / deleted. If workers is greater than 1, Handle can be
+// called concurrently from multiple worker threads.
 func NewProgram(workers uint, outRecordHandler OutRecordHandler) (*Program, error) {
 	progIdx := atomic.AddUintptr(&_progIdx, uintptr(1))
+	// TODO: add ability to redirect error messages. At the moment we pass NULL as
+	// print_err_msg, which means that DDlog will print messages to stderr.
 	prog := C.ddlog_run(C.uint(workers), false, nil, 0, nil)
 	p := &Program{
 		ptr:              prog,
@@ -139,8 +170,8 @@ func (p *Program) stopRecording() error {
 	return nil
 }
 
-// RecordCommands will create a file with the provided name to record all the commands sent to
-// DDLog. If the file already exists, it will be truncated.
+// RecordCommands creates a file with the provided name to record all the commands sent to DDlog. If
+// the file already exists, it will be truncated.
 func (p *Program) StartRecordingCommands(name string) error {
 	if err := p.stopRecording(); err != nil {
 		return fmt.Errorf("error when stopping command recording: %v", err)
@@ -160,6 +191,7 @@ func (p *Program) StartRecordingCommands(name string) error {
 	return nil
 }
 
+// StopRecordingCommands stops recording the commands sent to DDlog to file and closes the file.
 func (p *Program) StopRecordingCommands() error {
 	if err := p.stopRecording(); err != nil {
 		return fmt.Errorf("error when stopping command recording: %v", err)
@@ -167,6 +199,23 @@ func (p *Program) StopRecordingCommands() error {
 	return nil
 }
 
+// DumpInputSnapshot dumps current snapshot of input tables to the provided file in a format
+// suitable for replay debugging.
+func (p *Program) DumpInputSnapshot(name string) error {
+	snapshotFile, err := os.Create(name)
+	defer snapshotFile.Close()
+	if err != nil {
+		return fmt.Errorf("error when creating file '%s' to dump input snapshot: %v", name, err)
+	}
+	fd := snapshotFile.Fd()
+	rc := C.ddlog_dump_input_snapshot(p.ptr, C.int(fd))
+	if rc != 0 {
+		return fmt.Errorf("ddlog_dump_input_snapshot returned error code %d", rc)
+	}
+	return nil
+}
+
+// Stop stops the DDlog program and deallocates all the resources allocated by DDlog.
 func (p *Program) Stop() error {
 	if err := p.stopRecording(); err != nil {
 		return fmt.Errorf("error when stopping command recording: %v", err)
@@ -180,6 +229,8 @@ func (p *Program) Stop() error {
 	return nil
 }
 
+// StartTransaction starts a transaction. Note that DDlog does not support nested or concurrent
+// transactions.
 func (p *Program) StartTransaction() error {
 	rc := C.ddlog_transaction_start(p.ptr)
 	if rc != 0 {
@@ -188,6 +239,7 @@ func (p *Program) StartTransaction() error {
 	return nil
 }
 
+// CommitTransaction commits a transaction.
 func (p *Program) CommitTransaction() error {
 	// Because of garbage collection, cgo does not let us pass a Go pointer as the callback
 	// argument (C code is not supposed to store a Go pointer). We therefore use the trick
@@ -200,6 +252,16 @@ func (p *Program) CommitTransaction() error {
 	return nil
 }
 
+// RollbackTransaction rollbacks an ongoing transaction.
+func (p *Program) RollbackTransaction() error {
+	rc := C.ddlog_transaction_rollback(p.ptr)
+	if rc != 0 {
+		return fmt.Errorf("ddlog_transaction_rollback returned error code %d", rc)
+	}
+	return nil
+}
+
+// ApplyUpdates applies updates to DDlog tables. Must be called as part of a transaction.
 func (p *Program) ApplyUpdates(commands ...Command) error {
 	cmdArray := C.makeCmdArray(C.size_t(len(commands)))
 	defer C.freeCmdArray(cmdArray)
@@ -213,6 +275,7 @@ func (p *Program) ApplyUpdates(commands ...Command) error {
 	return nil
 }
 
+// ApplyUpdates applies a single update to DDlog tables. Must be called as part of a transaction.
 func (p *Program) ApplyUpdate(command Command) error {
 	rc := C.ddlog_apply_updates(p.ptr, &command.ptr, 1)
 	if rc != 0 {
@@ -221,6 +284,7 @@ func (p *Program) ApplyUpdate(command Command) error {
 	return nil
 }
 
+// ApplyUpdates starts a transaction, applies updates to DDlog tables and commits the transaction.
 func (p *Program) ApplyUpdatesAsTransaction(commands ...Command) error {
 	if err := p.StartTransaction(); err != nil {
 		return err
@@ -234,8 +298,9 @@ func (p *Program) ApplyUpdatesAsTransaction(commands ...Command) error {
 	return nil
 }
 
-//export HandleOutRecord
-func HandleOutRecord(progIdx C.uintptr_t, tableID C.size_t, recordPtr *C.ddlog_record, polarity C.bool) {
+// handleOutRecord is called from C for each new or deleted output record.
+//export handleOutRecord
+func handleOutRecord(progIdx C.uintptr_t, tableID C.size_t, recordPtr *C.ddlog_record, polarity C.bool) {
 	pIntf, ok := _progStore.Load(uintptr(progIdx))
 	if !ok {
 		panic("Cannot find program in store")
