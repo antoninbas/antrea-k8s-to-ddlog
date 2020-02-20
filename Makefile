@@ -19,6 +19,6 @@ fmt:
 check-unit:
 	$(GO) test -v github.com/antoninbas/antrea-k8s-to-ddlog/...
 
-.PHONY: check
-check:
-	$(GO) test -tags=integration github.com/antoninbas/antrea-k8s-to-ddlog/...
+.PHONY: check-bench
+check-bench:
+	$(GO) test -bench=. github.com/antoninbas/antrea-k8s-to-ddlog/...
