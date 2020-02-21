@@ -68,83 +68,174 @@ func (cs CString) Free() {
 type Record interface {
 	ptr() unsafe.Pointer
 
+	// Free releases the memory associated with a given record. Do not call this method if
+	// ownership of the record has already been transferred to DDlog (e.g. by adding the record
+	// to a command).
 	Free()
+	// Dump returns a string representation of a record.
 	Dump() string
 
+	// IsNull returns true iff the record is NULL.
 	IsNull() bool
+	// IsBool returns true iff the record is a boolean record.
 	IsBool() bool
+	// IsInt returns true iff the record is an integer record.
 	IsInt() bool
+	// IsString returns true iff the record is a string record.
 	IsString() bool
+	// IsTuple returns true iff the record is a tuple record.
 	IsTuple() bool
+	// IsVector returns true iff the record is a vector record.
 	IsVector() bool
+	// IsMap returns true iff the record is a map record.
 	IsMap() bool
+	// IsSet returns true iff the record is a set record.
 	IsSet() bool
+	// IsStruct returns true iff the record is a struct record.
 	IsStruct() bool
 
+	// IntBits returns the minimum number of bits required to represent the record if it is an
+	// integer record. It returns 0 is the record is not an integer record.
 	IntBits() uint
 
+	// ToBool returns the value of a boolean record. Behavior is undefined if the record is not
+	// a boolean.
 	ToBool() bool
+	// ToBoolSafe returns the value of a boolean record. Returns an error if the record is not a
+	// boolean.
 	ToBoolSafe() (bool, error)
+	// ToU64 returns the value of an integer record as a uint64. Behavior is undefined if the
+	// record is not an integer or if its value does not fit into 64 bits.
 	ToU64() uint64
+	// ToU64Safe returns the value of an integer record as a uint64. Returns an error if the
+	// record is not an integer or if its value does not fit into 64 bits.
 	ToU64Safe() (uint64, error)
+	// ToU32 returns the value of an integer record as a uint32. Behavior is undefined if the
+	// record is not an integer or if its value does not fit into 32 bits.
 	ToU32() uint32
+	// ToU32Safe returns the value of an integer record as a uint32. Returns an error if the
+	// record is not an integer or if its value does not fit into 32 bits.
 	ToU32Safe() (uint32, error)
+	// ToI64 returns the value of an integer record as an int64. Behavior is undefined if the
+	// record is not an integer or if its value does not fit into 64 bits.
 	ToI64() int64
+	// ToI64Safe returns the value of an integer record as an int64. Returns an error if the
+	// record is not an integer or if its value does not fit into 64 bits.
 	ToI64Safe() (int64, error)
+	// ToI32 returns the value of an integer record as an int32. Behavior is undefined if the
+	// record is not an integer or if its value does not fit into 32 bits.
 	ToI32() int32
+	// ToI32Safe returns the value of an integer record as an int32. Returns an error if the
+	// record is not an integer or if its value does not fit into 32 bits.
 	ToI32Safe() (int32, error)
+	// ToString returns the value of a string record. Behavior is undefined if the record is not
+	// a string.
 	ToString() string
+	// ToStringSafe returns the value of a string record. Returns an error if the record is not
+	// a string.
 	ToStringSafe() (string, error)
 
+	// AsTuple interprets the current record as a tuple, enabling the caller to use methods
+	// which are specific to tuples on the returned object. Behavior is undefined if the record
+	// is not a tuple.
 	AsTuple() RecordTuple
+	// AsTupleSafe interprets the current record as a tuple, enabling the caller to use methods
+	// which are specific to tuples on the returned object. Returns an error if the record is
+	// not a tuple.
 	AsTupleSafe() (RecordTuple, error)
+	// AsVector interprets the current record as a vector, enabling the caller to use methods
+	// which are specific to vectors on the returned object. Behavior is undefined if the record
+	// is not a vector.
 	AsVector() RecordVector
+	// AsVectorSafe interprets the current record as a vector, enabling the caller to use
+	// methods which are specific to vectors on the returned object. Returns an error if the
+	// record is not a vector.
 	AsVectorSafe() (RecordVector, error)
+	// AsMap interprets the current record as a map, enabling the caller to use methods which
+	// are specific to maps on the returned object. Behavior is undefined if the record is not a
+	// map.
 	AsMap() RecordMap
+	// AsMapSafe interprets the current record as a map, enabling the caller to use methods
+	// which are specific to maps on the returned object. Returns an error if the record is not
+	// a map.
 	AsMapSafe() (RecordMap, error)
+	// AsSet interprets the current record as a set, enabling the caller to use methods which
+	// are specific to sets on the returned object. Behavior is undefined if the record is not a
+	// set.
 	AsSet() RecordSet
+	// AsSetSafe interprets the current record as a set, enabling the caller to use methods
+	// which are specific to sets on the returned object. Returns an error if the record is not
+	// a set.
 	AsSetSafe() (RecordSet, error)
+	// AsStruct interprets the current record as a struct, enabling the caller to use methods
+	// which are specific to structs on the returned object. Behavior is undefined if the record
+	// is not a struct.
 	AsStruct() RecordStruct
+	// AsStructSafe interprets the current record as a struct, enabling the caller to use
+	// methods which are specific to structs on the returned object. Returns an error if the
+	// record is not a struct.
 	AsStructSafe() (RecordStruct, error)
 }
 
 // RecordTuple extends the Record interface for DDlog records of type tuple.
 type RecordTuple interface {
 	Record
+	// Push appends an element to the tuple.
 	Push(rValue Record)
+	// At returns the i-th element of the tuple. Returns a NULL record if the tuple has fewer
+	// than i elements.
 	At(idx uint) Record
+	// Size returns the number of elements in the tuple.
 	Size() uint
 }
 
 // RecordVector extends the Record interface for DDlog records of type vector.
 type RecordVector interface {
 	Record
+	// Push appends an element to the vector.
 	Push(rValue Record)
+	// At returns the i-th element of the vector. Returns a NULL record if the vector has fewer
+	// than i elements.
 	At(idx uint) Record
+	// Size returns the number of elements in the vector.
 	Size() uint
 }
 
 // RecordMap extends the Record interface for DDlog records of type map.
 type RecordMap interface {
 	Record
+	// Push appends a key-value pair to the map.
 	Push(rKey, rValue Record)
+	// KeyAt returns the i-th key of the map. Returns a NULL record if the map has fewer than i
+	// key-value pairs.
 	KeyAt(idx uint) Record
+	// ValueAt returns the i-th value of the map. Returns a NULL record if the map has fewer
+	// than i key-value pairs.
 	ValueAt(idx uint) Record
+	// At returns the i-th key-value pair of the map. Returns a NULL record if the map has fewer
+	// than i key-value pairs.
 	At(idx uint) (Record, Record)
+	// Size returns the number of key-value pairs in the map.
 	Size() uint
 }
 
 // RecordSet extends the Record interface for DDlog records of type set.
 type RecordSet interface {
 	Record
+	// Push appends an element to the set.
 	Push(rValue Record)
+	// At returns the i-th element of the set. Returns a NULL record if the set has fewer than i
+	// elements.
 	At(idx uint) Record
+	// Size returns the number of elements in the set.
 	Size() uint
 }
 
 // RecordStruct extends the Record interface for DDlog records of type struct.
 type RecordStruct interface {
 	Record
+	// At returns the i-th field of the struct. Returns a NULL record if the struct has fewer
+	// than i fields.
 	At(idx uint) Record
 }
 
@@ -176,15 +267,12 @@ func (r *record) ptr() unsafe.Pointer {
 	return r.recordPtr
 }
 
-// Dump returns a string representation of a record.
 func (r *record) Dump() string {
 	cs := C.ddlog_dump_record(r.ptr())
 	defer C.ddlog_string_free(cs)
 	return C.GoString(cs)
 }
 
-// Free releases the memory associated with a given record. Do not call this method if ownership of
-// the record has already been transferred to DDlog (e.g. by adding the record to a command).
 func (r *record) Free() {
 	C.ddlog_free(r.ptr())
 }

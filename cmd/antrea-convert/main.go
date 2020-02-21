@@ -38,20 +38,13 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE") // windows
 }
 
+func k8sLogger(msg string) {
+	klog.Errorf(msg)
+}
+
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
-
-	// ns := &v1.Namespace{
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name:   "testNamespace",
-	// 		UID:    "testUID",
-	// 		Labels: map[string]string{"app": "nginx"},
-	// 	},
-	// }
-	// r := ddlog.RecordNamespace(ns)
-	// defer r.Free()
-	// fmt.Println(r.Dump())
 
 	recordCommands := flag.String("record-commands", "", "Provide a file name where to record commands sent to DDLog")
 	dumpChanges := flag.String("dump-changes", "", "Provide a file name where to dump record changes")
@@ -75,6 +68,8 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	ddlog.SetErrMsgPrinter(k8sLogger)
 
 	var outRecordHandler ddlog.OutRecordHandler
 	if *dumpChanges == "" {
