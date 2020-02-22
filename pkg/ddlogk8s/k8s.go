@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
+	"github.com/vmware/differential-datalog/go/pkg/ddlog"
 )
 
 var (

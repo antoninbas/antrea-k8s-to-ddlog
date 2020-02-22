@@ -1,18 +1,13 @@
 GO := go
 BINDIR := $(CURDIR)/bin
 
-# CGO_LDFLAGS = -L$(CURDIR)/pkg/ddlog/libs -lnetworkpolicy_controller_ddlog
-ifndef CGO_CPPFLAGS
-$(error CGO_CPPFLAGS is not set)
-endif
-
-# CGO_CPPFLAGS = -I$(CURDIR)/pkg/ddlog
-ifndef CGO_LDFLAGS
-$(error CGO_LDFLAGS is not set)
-endif
+CGO_LDFLAGS:=-L$(CURDIR)/ddlog/libs -lnetworkpolicy_controller_ddlog
+CGO_CPPFLAGS:=-I$(CURDIR)/ddlog
+LD_LIBRARY_PATH:=$(CURDIR)/ddlog/libs
 
 export CGO_LDFLAGS
 export CGO_CPPFLAGS
+export LD_LIBRARY_PATH
 
 all: bin
 
@@ -34,7 +29,7 @@ check-unit:
 
 .PHONY: check-bench
 check-bench:
-	$(GO) test -bench=. github.com/antoninbas/antrea-k8s-to-ddlog/...
+	$(GO) test -v -bench=. github.com/antoninbas/antrea-k8s-to-ddlog/...
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="

@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/controller"
-	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/signals"
+	"github.com/vmware/differential-datalog/go/pkg/ddlog"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"

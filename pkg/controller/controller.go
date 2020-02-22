@@ -33,8 +33,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlog"
 	"github.com/antoninbas/antrea-k8s-to-ddlog/pkg/ddlogk8s"
+	"github.com/vmware/differential-datalog/go/pkg/ddlog"
 )
 
 const (
