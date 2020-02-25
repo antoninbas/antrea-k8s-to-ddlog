@@ -37,4 +37,4 @@ check-bench:
 
 .PHONY: golangci
 golangci: .golangci-bin
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml pkg/ddlog
+	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml

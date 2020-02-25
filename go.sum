@@ -134,6 +134,10 @@ github.com/stretchr/testify v1.5.1 h1:nOGnQDM7FYENwehXlg/kFVnos3rEvtKTjRvOWSzb6H
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/vmware/differential-datalog/go v0.0.0-20200222002014-f79831cfc92a h1:KrPmK7YpkFjglYTSjHsS824I/xHXNKRO95rqIL8vG5M=
 github.com/vmware/differential-datalog/go v0.0.0-20200222002014-f79831cfc92a/go.mod h1:tP3HG0juorX5T4Ix01B60VrMCsf8uOOPbJ+Z9HpDo04=
+github.com/vmware/differential-datalog/go v0.0.0-20200224173731-c18082d95857 h1:X4CCOFLFQ9Efj3fPFAWym9Yc/Q429Yv16OjjqcMv3Jk=
+github.com/vmware/differential-datalog/go v0.0.0-20200224173731-c18082d95857/go.mod h1:tP3HG0juorX5T4Ix01B60VrMCsf8uOOPbJ+Z9HpDo04=
+github.com/vmware/differential-datalog/go v0.0.0-20200225014333-b0716861a044 h1:A1tAN+1jUA20Q7xj6ygO9BFZ88FsiFGmmIZJUm8s+44=
+github.com/vmware/differential-datalog/go v0.0.0-20200225014333-b0716861a044/go.mod h1:tP3HG0juorX5T4Ix01B60VrMCsf8uOOPbJ+Z9HpDo04=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20190211182817-74369b46fc67/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
