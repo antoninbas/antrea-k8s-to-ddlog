@@ -294,11 +294,11 @@ func (c *Controller) processPod(key string) error {
 	pod, err := c.podLister.Pods(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlogk8s.RecordPodKey(namespace, name)
+		r := ddlogk8s.NewRecordPodKey(namespace, name)
 		klog.Infof("DELETE POD: %s", r.Dump())
 		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.PodTableID, r)
 	} else {
-		r := ddlogk8s.RecordPod(pod)
+		r := ddlogk8s.NewRecordPod(pod)
 		klog.Infof("UPDATE POD: %s", r.Dump())
 		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.PodTableID, r)
 	}
@@ -326,11 +326,11 @@ func (c *Controller) processNamespace(key string) error {
 	namespace, err := c.namespaceLister.Get(key)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlogk8s.RecordNamespaceKey(key)
+		r := ddlogk8s.NewRecordNamespaceKey(key)
 		klog.Infof("DELETE NAMESPACE: %s", r.Dump())
 		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.NamespaceTableID, r)
 	} else {
-		r := ddlogk8s.RecordNamespace(namespace)
+		r := ddlogk8s.NewRecordNamespace(namespace)
 		klog.Infof("UPDATE NAMESPACE: %s", r.Dump())
 		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.NamespaceTableID, r)
 	}
@@ -362,11 +362,11 @@ func (c *Controller) processNetworkPolicy(key string) error {
 	networkPolicy, err := c.networkPolicyLister.NetworkPolicies(namespace).Get(name)
 	var cmd ddlog.Command
 	if err != nil { // deletion
-		r := ddlogk8s.RecordNetworkPolicyKey(namespace, name)
+		r := ddlogk8s.NewRecordNetworkPolicyKey(namespace, name)
 		klog.Infof("DELETE NETWORKPOLICY: %s", r.Dump())
 		cmd = ddlog.NewDeleteKeyCommand(ddlogk8s.NetworkPolicyTableID, r)
 	} else {
-		r := ddlogk8s.RecordNetworkPolicy(networkPolicy)
+		r := ddlogk8s.NewRecordNetworkPolicy(networkPolicy)
 		klog.Infof("UPDATE NETWORKPOLICY: %s", r.Dump())
 		cmd = ddlog.NewInsertOrUpdateCommand(ddlogk8s.NetworkPolicyTableID, r)
 	}

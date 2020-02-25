@@ -16,7 +16,7 @@ func BenchmarkRecordNamespace(b *testing.B) {
 		},
 	}
 	for i := 0; i < b.N; i++ {
-		r := RecordNamespace(ns)
+		r := NewRecordNamespace(ns)
 		// r.Dump()
 		r.Free()
 	}

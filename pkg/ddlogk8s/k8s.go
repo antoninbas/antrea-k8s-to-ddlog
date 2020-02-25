@@ -37,55 +37,54 @@ var (
 	UIDConstructor                         = ddlog.NewCString("k8spolicy.UID")
 )
 
-func RecordUID(UID types.UID) ddlog.Record {
+func NewRecordUID(UID types.UID) ddlog.Record {
 	return ddlog.NewRecordStructStatic(UIDConstructor, ddlog.NewRecordString(string(UID)))
 }
 
-func RecordLabels(labels map[string]string) ddlog.Record {
+func NewRecordLabels(labels map[string]string) ddlog.Record {
 	rLabels := ddlog.NewRecordMap() // empty map
 	for k, v := range labels {
-		// ddlog.NewRecordMapPush(rLabels, ddlog.NewRecordString(k), ddlog.NewRecordString(v))
 		rLabels.Push(ddlog.NewRecordString(k), ddlog.NewRecordString(v))
 	}
 	return rLabels
 }
 
-func RecordNamespace(ns *v1.Namespace) ddlog.Record {
+func NewRecordNamespace(ns *v1.Namespace) ddlog.Record {
 	rName := ddlog.NewRecordString(ns.Name)
-	rUID := RecordUID(ns.UID)
-	rLabels := RecordLabels(ns.Labels)
+	rUID := NewRecordUID(ns.UID)
+	rLabels := NewRecordLabels(ns.Labels)
 	return ddlog.NewRecordStructStatic(NamespaceConstructor, rName, rUID, rLabels)
 }
 
-func RecordNamespaceKey(namespace string) ddlog.Record {
+func NewRecordNamespaceKey(namespace string) ddlog.Record {
 	return ddlog.NewRecordString(namespace)
 }
 
-func RecordPodSpec(spec *v1.PodSpec) ddlog.Record {
+func NewRecordPodSpec(spec *v1.PodSpec) ddlog.Record {
 	return ddlog.NewRecordStructStatic(PodSpecConstructor, ddlog.NewRecordString(spec.NodeName))
 }
 
-func RecordPodStatus(status *v1.PodStatus) ddlog.Record {
+func NewRecordPodStatus(status *v1.PodStatus) ddlog.Record {
 	return ddlog.NewRecordStructStatic(PodStatusConstructor, ddlog.NewRecordString(status.PodIP))
 }
 
-func RecordPod(pod *v1.Pod) ddlog.Record {
+func NewRecordPod(pod *v1.Pod) ddlog.Record {
 	rName := ddlog.NewRecordString(pod.Name)
 	rNamespace := ddlog.NewRecordString(pod.Namespace)
-	rUID := RecordUID(pod.UID)
-	rLabels := RecordLabels(pod.Labels)
-	rSpec := RecordPodSpec(&pod.Spec)
-	rStatus := RecordPodStatus(&pod.Status)
+	rUID := NewRecordUID(pod.UID)
+	rLabels := NewRecordLabels(pod.Labels)
+	rSpec := NewRecordPodSpec(&pod.Spec)
+	rStatus := NewRecordPodStatus(&pod.Status)
 	return ddlog.NewRecordStructStatic(PodConstructor, rName, rNamespace, rUID, rLabels, rSpec, rStatus)
 }
 
-func RecordPodKey(namespace, name string) ddlog.Record {
+func NewRecordPodKey(namespace, name string) ddlog.Record {
 	rNamespace := ddlog.NewRecordString(namespace)
 	rName := ddlog.NewRecordString(name)
 	return ddlog.NewRecordPair(rNamespace, rName)
 }
 
-func RecordIntOrString(v *intstr.IntOrString) ddlog.Record {
+func NewRecordIntOrString(v *intstr.IntOrString) ddlog.Record {
 	if v.Type == intstr.Int {
 		return ddlog.NewRecordLeft(ddlog.NewRecordI32(v.IntVal))
 	} else if v.Type == intstr.String {
@@ -95,7 +94,7 @@ func RecordIntOrString(v *intstr.IntOrString) ddlog.Record {
 	return ddlog.NewRecordNull()
 }
 
-func RecordLabelSelectorRequirement(req *metav1.LabelSelectorRequirement) ddlog.Record {
+func NewRecordLabelSelectorRequirement(req *metav1.LabelSelectorRequirement) ddlog.Record {
 	rKey := ddlog.NewRecordString(req.Key)
 
 	var rOperator ddlog.Record
@@ -118,16 +117,16 @@ func RecordLabelSelectorRequirement(req *metav1.LabelSelectorRequirement) ddlog.
 	return ddlog.NewRecordStructStatic(LabelSelectorRequirementConstructor, rKey, rOperator, rValues)
 }
 
-func RecordLabelSelector(labelSelector *metav1.LabelSelector) ddlog.Record {
-	rMatchLabels := RecordLabels(labelSelector.MatchLabels)
+func NewRecordLabelSelector(labelSelector *metav1.LabelSelector) ddlog.Record {
+	rMatchLabels := NewRecordLabels(labelSelector.MatchLabels)
 	rMatchExpressions := ddlog.NewRecordVector()
 	for _, req := range labelSelector.MatchExpressions {
-		rMatchExpressions.Push(RecordLabelSelectorRequirement(&req))
+		rMatchExpressions.Push(NewRecordLabelSelectorRequirement(&req))
 	}
 	return ddlog.NewRecordStructStatic(LabelSelectorConstructor, rMatchLabels, rMatchExpressions)
 }
 
-func RecordNetworkPolicyPort(policyPort *networkingv1.NetworkPolicyPort) ddlog.Record {
+func NewRecordNetworkPolicyPort(policyPort *networkingv1.NetworkPolicyPort) ddlog.Record {
 	var rProto ddlog.Record
 	if policyPort.Protocol == nil {
 		rProto = ddlog.NewRecordNone()
@@ -139,13 +138,13 @@ func RecordNetworkPolicyPort(policyPort *networkingv1.NetworkPolicyPort) ddlog.R
 	if policyPort.Port == nil {
 		rPort = ddlog.NewRecordNone()
 	} else {
-		rPort = ddlog.NewRecordSome(RecordIntOrString(policyPort.Port))
+		rPort = ddlog.NewRecordSome(NewRecordIntOrString(policyPort.Port))
 	}
 
 	return ddlog.NewRecordStructStatic(NetworkPolicyPortConstructor, rProto, rPort)
 }
 
-func RecordIPBlock(ipBlock *networkingv1.IPBlock) ddlog.Record {
+func NewRecordIPBlock(ipBlock *networkingv1.IPBlock) ddlog.Record {
 	rCIDR := ddlog.NewRecordString(ipBlock.CIDR)
 	rExcept := ddlog.NewRecordVector()
 	for _, except := range ipBlock.Except {
@@ -154,70 +153,70 @@ func RecordIPBlock(ipBlock *networkingv1.IPBlock) ddlog.Record {
 	return ddlog.NewRecordStructStatic(IPBlockConstructor, rCIDR, rExcept)
 }
 
-func RecordNetworkPolicyPeer(policyPeer *networkingv1.NetworkPolicyPeer) ddlog.Record {
+func NewRecordNetworkPolicyPeer(policyPeer *networkingv1.NetworkPolicyPeer) ddlog.Record {
 	var rPodSelector ddlog.Record
 	if policyPeer.PodSelector == nil {
 		rPodSelector = ddlog.NewRecordNone()
 	} else {
-		rPodSelector = ddlog.NewRecordSome(RecordLabelSelector(policyPeer.PodSelector))
+		rPodSelector = ddlog.NewRecordSome(NewRecordLabelSelector(policyPeer.PodSelector))
 	}
 
 	var rNamespaceSelector ddlog.Record
 	if policyPeer.NamespaceSelector == nil {
 		rNamespaceSelector = ddlog.NewRecordNone()
 	} else {
-		rNamespaceSelector = ddlog.NewRecordSome(RecordLabelSelector(policyPeer.NamespaceSelector))
+		rNamespaceSelector = ddlog.NewRecordSome(NewRecordLabelSelector(policyPeer.NamespaceSelector))
 	}
 
 	var rIPBlock ddlog.Record
 	if policyPeer.IPBlock == nil {
 		rIPBlock = ddlog.NewRecordNone()
 	} else {
-		rIPBlock = ddlog.NewRecordSome(RecordIPBlock(policyPeer.IPBlock))
+		rIPBlock = ddlog.NewRecordSome(NewRecordIPBlock(policyPeer.IPBlock))
 	}
 
 	return ddlog.NewRecordStructStatic(NetworkPolicyPeerConstructor, rPodSelector, rNamespaceSelector, rIPBlock)
 }
 
-func RecordNetworkPolicyIngressRule(rule *networkingv1.NetworkPolicyIngressRule) ddlog.Record {
+func NewRecordNetworkPolicyIngressRule(rule *networkingv1.NetworkPolicyIngressRule) ddlog.Record {
 	rPorts := ddlog.NewRecordVector()
 	for _, port := range rule.Ports {
-		rPorts.Push(RecordNetworkPolicyPort(&port))
+		rPorts.Push(NewRecordNetworkPolicyPort(&port))
 	}
 
 	rFrom := ddlog.NewRecordVector()
 	for _, from := range rule.From {
-		rFrom.Push(RecordNetworkPolicyPeer(&from))
+		rFrom.Push(NewRecordNetworkPolicyPeer(&from))
 	}
 
 	return ddlog.NewRecordStructStatic(NetworkPolicyIngressRuleConstructor, rPorts, rFrom)
 }
 
-func RecordNetworkPolicyEgressRule(rule *networkingv1.NetworkPolicyEgressRule) ddlog.Record {
+func NewRecordNetworkPolicyEgressRule(rule *networkingv1.NetworkPolicyEgressRule) ddlog.Record {
 	rPorts := ddlog.NewRecordVector()
 	for _, port := range rule.Ports {
-		rPorts.Push(RecordNetworkPolicyPort(&port))
+		rPorts.Push(NewRecordNetworkPolicyPort(&port))
 	}
 
 	rTo := ddlog.NewRecordVector()
 	for _, to := range rule.To {
-		rTo.Push(RecordNetworkPolicyPeer(&to))
+		rTo.Push(NewRecordNetworkPolicyPeer(&to))
 	}
 
 	return ddlog.NewRecordStructStatic(NetworkPolicyEgressRuleConstructor, rPorts, rTo)
 }
 
-func RecordNetworkPolicySpec(spec *networkingv1.NetworkPolicySpec) ddlog.Record {
-	rPodSelector := RecordLabelSelector(&spec.PodSelector)
+func NewRecordNetworkPolicySpec(spec *networkingv1.NetworkPolicySpec) ddlog.Record {
+	rPodSelector := NewRecordLabelSelector(&spec.PodSelector)
 
 	rIngress := ddlog.NewRecordVector()
 	for _, rule := range spec.Ingress {
-		rIngress.Push(RecordNetworkPolicyIngressRule(&rule))
+		rIngress.Push(NewRecordNetworkPolicyIngressRule(&rule))
 	}
 
 	rEgress := ddlog.NewRecordVector()
 	for _, rule := range spec.Egress {
-		rEgress.Push(RecordNetworkPolicyEgressRule(&rule))
+		rEgress.Push(NewRecordNetworkPolicyEgressRule(&rule))
 	}
 
 	rPolicyTypes := ddlog.NewRecordVector()
@@ -232,15 +231,15 @@ func RecordNetworkPolicySpec(spec *networkingv1.NetworkPolicySpec) ddlog.Record 
 	return ddlog.NewRecordStruct("k8spolicy.NetworkPolicySpec", rPodSelector, rIngress, rEgress, rPolicyTypes)
 }
 
-func RecordNetworkPolicy(np *networkingv1.NetworkPolicy) ddlog.Record {
+func NewRecordNetworkPolicy(np *networkingv1.NetworkPolicy) ddlog.Record {
 	rName := ddlog.NewRecordString(np.Name)
 	rNamespace := ddlog.NewRecordString(np.Namespace)
-	rUID := RecordUID(np.UID)
-	rSpec := RecordNetworkPolicySpec(&np.Spec)
+	rUID := NewRecordUID(np.UID)
+	rSpec := NewRecordNetworkPolicySpec(&np.Spec)
 	return ddlog.NewRecordStructStatic(NetworkPolicyConstructor, rName, rNamespace, rUID, rSpec)
 }
 
-func RecordNetworkPolicyKey(namespace, name string) ddlog.Record {
+func NewRecordNetworkPolicyKey(namespace, name string) ddlog.Record {
 	rNamespace := ddlog.NewRecordString(namespace)
 	rName := ddlog.NewRecordString(name)
 	return ddlog.NewRecordPair(rNamespace, rName)
