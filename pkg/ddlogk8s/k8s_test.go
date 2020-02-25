@@ -9,7 +9,13 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/vmware/differential-datalog/go/pkg/ddlog"
 )
+
+func TestOutputTables(t *testing.T) {
+	assert.Equal(t, "AppliedToGroup", ddlog.GetTableName(AppliedToGroupTableID))
+}
 
 func TestRecordNamespace(t *testing.T) {
 	ns := &v1.Namespace{

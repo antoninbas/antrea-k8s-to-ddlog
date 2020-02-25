@@ -15,6 +15,17 @@ var (
 	NamespaceTableID     = ddlog.GetTableID("k8spolicy.Namespace")
 	NetworkPolicyTableID = ddlog.GetTableID("k8spolicy.NetworkPolicy")
 
+	AppliedToGroupTableID           = ddlog.GetTableID("AppliedToGroup")
+	AppliedToGroupPodsByNodeTableID = ddlog.GetTableID("AppliedToGroupPodsByNode")
+	AppliedToGroupSpanTableID       = ddlog.GetTableID("AppliedToGroupSpan")
+
+	AddressGroupTableID        = ddlog.GetTableID("AddressGroup")
+	AddressGroupAddressTableID = ddlog.GetTableID("AddressGroupAddress")
+	AddressGroupSpanTableID    = ddlog.GetTableID("AddressGroupSpan")
+
+	NetworkPolicyOutTableID     = ddlog.GetTableID("NetworkPolicy")
+	NetworkPolicyOutSpanTableID = ddlog.GetTableID("NetworkPolicySpan")
+
 	// these are never freed
 	NetworkPolicyConstructor               = ddlog.NewCString("k8spolicy.NetworkPolicy")
 	NetworkPolicyPortConstructor           = ddlog.NewCString("k8spolicy.NetworkPolicyPort")
